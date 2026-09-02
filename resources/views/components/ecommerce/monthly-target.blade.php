@@ -3,10 +3,10 @@
         <div class="flex justify-between">
             <div>
                 <h3 class="text-lg font-semibold text-gray-800 dark:text-white/90">
-                    Monthly Target
+                    Queue Usage
                 </h3>
                 <p class="mt-1 text-theme-sm text-gray-500 dark:text-gray-400">
-                    Target you’ve set for each month
+                    Usage of queue that the current servers can handle.
                 </p>
             </div>
             <!-- Dropdown Menu -->
