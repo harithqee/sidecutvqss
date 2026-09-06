@@ -13,6 +13,16 @@ Route::get('/queue', function () {
     return view('pages.queue', ['title' => 'Queue']);
 })->name('queue');
 
+// messages page
+Route::get('/messages', function () {
+    return view('pages.messages', ['title' => 'Messages']);
+})->name('messages');
+
+// statistics page
+Route::get('/statistics', function () {
+    return view('pages.statistics', ['title' => 'Statistics']);
+})->name('statistics');
+
 // blank page
 Route::get('/blank', function () {
     return view('pages.blank', ['title' => 'Blank']);
