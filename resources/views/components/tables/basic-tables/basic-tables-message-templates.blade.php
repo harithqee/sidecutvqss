@@ -87,9 +87,11 @@
         template.isActive = !template.isActive;
     },
     deleteTemplate(template) {
-        this.templates = this.templates.filter(function(t) {
-            return t.id !== template.id;
-        });
+        if (confirm('Delete template ' + template.name + '? This cannot be undone.')) {
+            this.templates = this.templates.filter(function(t) {
+                return t.id !== template.id;
+            });
+        }
     }
 }">
     <div class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
@@ -135,7 +137,7 @@
                                     </div>
                                 </template>
                                 <template x-if="template.editing">
-                                    <input type="text" x-model="template.name" class="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-theme-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white/90" />
+                                    <input type="text" x-model="template.name" class="w-full rounded-lg border border-brand-300 px-2 py-1.5 text-theme-sm ring-3 ring-brand-500/10 dark:border-brand-700 dark:bg-gray-800 dark:text-white/90" />
                                 </template>
                             </td>
 
@@ -144,23 +146,27 @@
                                     <p class="text-gray-500 text-theme-sm dark:text-gray-400" x-text="template.trigger"></p>
                                 </template>
                                 <template x-if="template.editing">
-                                    <input type="text" x-model="template.trigger" class="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-theme-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white/90" />
+                                    <input type="text" x-model="template.trigger" class="w-full rounded-lg border border-brand-300 px-2 py-1.5 text-theme-sm ring-3 ring-brand-500/10 dark:border-brand-700 dark:bg-gray-800 dark:text-white/90" />
                                 </template>
                             </td>
 
                             <td class="px-5 py-4 sm:px-6">
                                 <template x-if="!template.editing">
-                                    <p class="max-w-[260px] truncate text-gray-500 text-theme-sm dark:text-gray-400" x-text="template.message"></p>
+                                    <p class="max-w-[260px] truncate text-gray-500 text-theme-sm dark:text-gray-400" :title="template.message" x-text="template.message"></p>
                                 </template>
                                 <template x-if="template.editing">
-                                    <textarea x-model="template.message" rows="2" class="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-theme-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white/90"></textarea>
+                                    <textarea x-model="template.message" rows="2" class="w-full rounded-lg border border-brand-300 px-2 py-1.5 text-theme-sm ring-3 ring-brand-500/10 dark:border-brand-700 dark:bg-gray-800 dark:text-white/90"></textarea>
                                 </template>
                             </td>
 
                             <td class="px-5 py-4 sm:px-6">
-                                <p class="text-theme-xs inline-block rounded-full px-2 py-0.5 font-medium"
-                                   :class="template.isActive ? 'bg-green-50 text-green-700 dark:bg-green-500/15 dark:text-green-500' : 'bg-gray-100 text-gray-500 dark:bg-gray-500/15 dark:text-gray-400'"
-                                   x-text="template.isActive ? 'Active' : 'Inactive'"></p>
+                                <span class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-theme-xs font-medium"
+                                   :class="template.isActive ? 'bg-green-50 text-green-700 dark:bg-green-500/15 dark:text-green-500' : 'bg-gray-100 text-gray-500 dark:bg-gray-500/15 dark:text-gray-400'">
+                                    <svg class="h-1.5 w-1.5 fill-current" viewBox="0 0 8 8">
+                                        <circle cx="4" cy="4" r="4" />
+                                    </svg>
+                                    <span x-text="template.isActive ? 'Active' : 'Inactive'"></span>
+                                </span>
                             </td>
 
                             <td class="px-5 py-4 sm:px-6">
@@ -170,8 +176,12 @@
                                         <button
                                             @click="startEdit(template)"
                                             type="button"
-                                            class="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-theme-xs font-medium text-gray-700 shadow-theme-xs transition hover:bg-gray-50 dark:border-gray-700 dark:bg-white/[0.03] dark:text-gray-300 dark:hover:bg-white/[0.05]">
-                                            Edit
+                                            title="Edit template"
+                                            class="inline-flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50 p-2 text-blue-600 shadow-theme-xs transition hover:bg-blue-100 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                            </svg>
                                         </button>
                                     </template>
 
@@ -179,7 +189,11 @@
                                         <button
                                             @click="saveEdit(template)"
                                             type="button"
+                                            title="Save changes"
                                             class="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-2 text-theme-xs font-medium text-white shadow-theme-xs transition hover:bg-green-700">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none">
+                                                <path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                            </svg>
                                             Save
                                         </button>
                                     </template>
@@ -188,23 +202,38 @@
                                         <button
                                             @click="cancelEdit(template)"
                                             type="button"
-                                            class="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-theme-xs font-medium text-gray-700 shadow-theme-xs transition hover:bg-gray-50 dark:border-gray-700 dark:bg-white/[0.03] dark:text-gray-300 dark:hover:bg-white/[0.05]">
+                                            title="Discard changes"
+                                            class="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-theme-xs font-medium text-gray-600 shadow-theme-xs transition hover:bg-gray-50 dark:border-gray-700 dark:bg-white/[0.03] dark:text-gray-300 dark:hover:bg-white/[0.05]">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none">
+                                                <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                            </svg>
                                             Cancel
                                         </button>
                                     </template>
 
+                                    <!-- Toggle Active/Inactive: red for disable, green for enable -->
                                     <button
                                         @click="toggleActive(template)"
                                         type="button"
-                                        class="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-theme-xs font-medium text-gray-700 shadow-theme-xs transition hover:bg-gray-50 dark:border-gray-700 dark:bg-white/[0.03] dark:text-gray-300 dark:hover:bg-white/[0.05]">
-                                        <span x-text="template.isActive ? 'Disable' : 'Enable'"></span>
+                                        :title="template.isActive ? 'Disable this template' : 'Enable this template'"
+                                        class="inline-flex items-center justify-center rounded-lg border p-2 shadow-theme-xs transition"
+                                        :class="template.isActive
+                                            ? 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20'
+                                            : 'border-green-200 bg-green-50 text-green-600 hover:bg-green-100 dark:border-green-500/30 dark:bg-green-500/10 dark:text-green-400 dark:hover:bg-green-500/20'">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                            <path d="M12 2v10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                            <path d="M18.36 6.64a9 9 0 1 1-12.73 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                        </svg>
                                     </button>
 
                                     <button
                                         @click="deleteTemplate(template)"
                                         type="button"
-                                        class="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-2 text-theme-xs font-medium text-white shadow-theme-xs transition hover:bg-red-700">
-                                        Delete
+                                        title="Delete template permanently"
+                                        class="ml-1 inline-flex items-center justify-center rounded-lg border border-red-200 bg-white p-2 text-red-500 shadow-theme-xs transition hover:border-red-300 hover:bg-red-50 dark:border-red-500/30 dark:bg-white/[0.03] dark:text-red-400 dark:hover:bg-red-500/10">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                            <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                        </svg>
                                     </button>
 
                                 </div>

@@ -104,6 +104,9 @@ Route::get('/videos', function () {
 })->name('videos');
 
 
+Route::get('/customers', function () {
+    return view('pages.customers', ['title' => 'Customers Landing Page']);
+})->name('customers');
 
 
 

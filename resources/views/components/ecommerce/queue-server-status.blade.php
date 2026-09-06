@@ -1,4 +1,4 @@
-<div class="col-span-12 xl:col-span-6">
+﻿<div class="col-span-12 xl:col-span-6">
   <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-6"
        x-data="{
           barbers: [
@@ -16,7 +16,6 @@
     <!-- Card 1: Queue Status -->
     <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
 
-      <!-- Header: Icon & Title -->
       <div class="flex items-center gap-4 mb-6">
         <div class="flex items-center justify-center w-12 h-12 bg-gray-100 rounded-xl dark:bg-gray-800">
           <svg class="fill-gray-800 dark:fill-white/90" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -29,7 +28,6 @@
         </div>
       </div>
 
-      <!-- Content: Value & Active/Inactive Badge -->
       <div class="flex items-end justify-between">
         <h4 class="font-bold text-gray-800 text-title-sm dark:text-white/90">
           <span x-text="queueCount"></span>
@@ -45,7 +43,6 @@
         </span>
       </div>
 
-      <!-- Optional: Warning message when no barbers active -->
       <div x-show="!anyBarberActive" x-cloak class="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-500/15 dark:text-red-400">
         No servers are currently active. Queue is paused.
       </div>
@@ -54,7 +51,6 @@
     <!-- Card 2: Server Status List (read-only) -->
     <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
 
-      <!-- Header: Icon & Title -->
       <div class="flex items-center gap-4 mb-6">
         <div class="flex items-center justify-center w-12 h-12 bg-gray-100 rounded-xl dark:bg-gray-800">
           <svg class="fill-gray-800 dark:fill-white/90" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -67,11 +63,9 @@
         </div>
       </div>
 
-      <!-- Full Width List (read-only) -->
       <div class="flex flex-col gap-5">
         <template x-for="(barber, index) in barbers" :key="index">
           <div class="flex items-center justify-between gap-3">
-            <!-- Left side: Avatar & Name -->
             <div class="flex items-center gap-3">
               <img :src="barber.img" :alt="barber.name" class="h-11 w-11 shrink-0 rounded-full object-cover shadow-sm" />
               <div class="flex flex-col">
@@ -80,7 +74,6 @@
               </div>
             </div>
 
-            <!-- Right side: Status only, no toggle -->
             <span class="flex shrink-0 items-center gap-2 text-sm font-medium transition-colors duration-300"
                   :class="barber.active ? 'text-green-500' : 'text-red-500'">
               <svg class="w-2.5 h-2.5 fill-current" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg">
