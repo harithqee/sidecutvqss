@@ -11,7 +11,6 @@
         <x-ecommerce.monthly-target />
     </div>
 
-    <!-- Row 2: Queue Status + Server Status (already built as one col-span-6 unit) -->
 
    
 

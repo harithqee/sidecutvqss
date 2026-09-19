@@ -11,7 +11,7 @@
         <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">
             <span class="text-sm text-gray-500 dark:text-gray-400" x-text="stat.label"></span>
             <div class="mt-2 flex items-end justify-between">
-                <h4 class="font-bold text-gray-800 text-title-sm dark:text-white/90" x-text="stat.value"></h4>
+                <h4 class="font-bold text-gray-800 text-title-sm dark:text-white/90" x-text="stat.valuwe"></h4>
                 <span class="flex items-center gap-1 rounded-full py-0.5 pl-2 pr-2.5 text-xs font-medium"
                       :class="stat.trend === 'up' ? 'bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500' : 'bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-500'"
                       x-text="stat.change"></span>

@@ -1,40 +1,50 @@
 <div x-data="{
-    servers: [
-        {
-            id: 1,
-            name: 'Lindsey Curtis',
-            role: 'Senior Barber',
-            image: './images/user/user-17.jpg',
-            isActive: true,
-            editing: false,
-        },
-        {
-            id: 2,
-            name: 'Danial',
-            role: 'Junior Barber',
-            image: './images/user/user-18.jpg',
-            isActive: false,
-            editing: false,
-        },
-    ],
+    servers: [],
     newServerName: '',
     newServerRole: '',
-    nextId: 3,
 
-    addServer() {
+    async init() {
+        await this.loadServers();
+    },
+
+    async loadServers() {
+        const res = await fetch('/api/barbers');
+        const data = await res.json();
+        this.servers = data.map(function(s) {
+            return {
+                id: s.id,
+                name: s.name,
+                role: s.role,
+                image: s.image || './images/user/user-01.jpg',
+                isActive: s.is_active,
+                editing: false,
+            };
+        });
+    },
+
+    async addServer() {
         if (!this.newServerName.trim() || !this.newServerRole.trim()) {
             alert('Please enter both name and role.');
             return;
         }
+        const res = await fetch('/api/barbers', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({ name: this.newServerName, role: this.newServerRole })
+        });
+        if (!res.ok) {
+            alert('Could not add server.');
+            return;
+        }
+        const s = await res.json();
         this.servers.push({
-            id: this.nextId,
-            name: this.newServerName,
-            role: this.newServerRole,
-            image: './images/user/user-01.jpg',
-            isActive: true,
+            id: s.id,
+            name: s.name,
+            role: s.role,
+            image: s.image || './images/user/user-01.jpg',
+            isActive: s.is_active,
             editing: false,
         });
-        this.nextId = this.nextId + 1;
         this.newServerName = '';
         this.newServerRole = '';
     },
@@ -43,7 +53,16 @@
         server.editing = true;
     },
 
-    saveEdit(server) {
+    async saveEdit(server) {
+        const res = await fetch('/api/barbers/' + server.id, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({ name: server.name, role: server.role })
+        });
+        if (!res.ok) {
+            alert('Could not save changes.');
+            return;
+        }
         server.editing = false;
     },
 
@@ -51,16 +70,31 @@
         server.editing = false;
     },
 
-    toggleActive(server) {
-        server.isActive = !server.isActive;
+    async toggleActive(server) {
+        const res = await fetch('/api/barbers/' + server.id + '/toggle-active', {
+            method: 'PATCH',
+            headers: { 'Accept': 'application/json' }
+        });
+        const updated = await res.json();
+        server.isActive = updated.is_active;
     },
 
-    deleteServer(server) {
-        if (confirm('Delete ' + server.name + '? This cannot be undone.')) {
-            this.servers = this.servers.filter(function(s) {
-                return s.id !== server.id;
-            });
+    async deleteServer(server) {
+        if (!confirm('Delete ' + server.name + '? This cannot be undone.')) {
+            return;
         }
+        const res = await fetch('/api/barbers/' + server.id, {
+            method: 'DELETE',
+            headers: { 'Accept': 'application/json' }
+        });
+        if (res.status === 422) {
+            const body = await res.json();
+            alert(body.message);
+            return;
+        }
+        this.servers = this.servers.filter(function(s) {
+            return s.id !== server.id;
+        });
     }
 }">
     <div class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
@@ -102,24 +136,16 @@
                 <thead>
                     <tr class="border-b border-gray-100 dark:border-gray-800">
                         <th class="px-5 py-3 text-left sm:px-6">
-                            <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
-                                Server
-                            </p>
+                            <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Server</p>
                         </th>
                         <th class="px-5 py-3 text-left sm:px-6">
-                            <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
-                                Role
-                            </p>
+                            <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Role</p>
                         </th>
                         <th class="px-5 py-3 text-left sm:px-6">
-                            <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
-                                Status
-                            </p>
+                            <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Status</p>
                         </th>
                         <th class="px-5 py-3 text-left sm:px-6">
-                            <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
-                                Actions
-                            </p>
+                            <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Actions</p>
                         </th>
                     </tr>
                 </thead>
@@ -163,7 +189,6 @@
                             <td class="px-5 py-4 sm:px-6">
                                 <div class="flex items-center gap-2">
 
-                                    <!-- Edit: informational — outlined blue -->
                                     <template x-if="!server.editing">
                                         <button
                                             @click="startEdit(server)"
@@ -177,7 +202,6 @@
                                         </button>
                                     </template>
 
-                                    <!-- Save: positive/confirm — solid green -->
                                     <template x-if="server.editing">
                                         <button
                                             @click="saveEdit(server)"
@@ -191,7 +215,6 @@
                                         </button>
                                     </template>
 
-                                    <!-- Cancel: neutral — plain gray outline -->
                                     <template x-if="server.editing">
                                         <button
                                             @click="cancelEdit(server)"
@@ -205,7 +228,6 @@
                                         </button>
                                     </template>
 
-                                    <!-- Toggle Active/Inactive: caution when deactivating, positive when activating -->
                                     <button
                                         @click="toggleActive(server)"
                                         type="button"
@@ -223,7 +245,6 @@
                                         </svg>
                                     </button>
 
-                                    <!-- Delete: destructive — solid red, isolated with left margin -->
                                     <button
                                         @click="deleteServer(server)"
                                         type="button"

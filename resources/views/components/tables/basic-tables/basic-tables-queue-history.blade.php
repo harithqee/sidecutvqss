@@ -1,99 +1,38 @@
 <div x-data="{
-    history: [
-        {
-            id: 1,
-            user: {
-                image: './images/user/user-17.jpg',
-                name: 'Lindsey Curtis',
-                role: 'Regular Customer',
-            },
-            queueNumber: '#128',
-            server: 'Server #2',
-            service: 'Haircut & Beard Trim',
-            joinedAt: '9:45 AM',
-            waitingTime: '30 min',
-            servedAt: '10:15 AM',
-            finishedAt: '10:40 AM',
-            date: 'Sep 5, 2026',
-            status: 'Completed',
-        },
-        {
-            id: 2,
-            user: {
-                image: './images/user/user-18.jpg',
-                name: 'Kaiya George',
-                role: 'New Customer',
-            },
-            queueNumber: '#127',
-            server: 'Server #1',
-            service: 'Haircut',
-            joinedAt: '9:25 AM',
-            waitingTime: '25 min',
-            servedAt: '9:50 AM',
-            finishedAt: '10:10 AM',
-            date: 'Sep 5, 2026',
-            status: 'Completed',
-        },
-        {
-            id: 3,
-            user: {
-                image: './images/user/user-19.jpg',
-                name: 'Zain Geidt',
-                role: 'Regular Customer',
-            },
-            queueNumber: '#126',
-            server: 'Server #2',
-            service: 'Shave',
-            joinedAt: '9:10 AM',
-            waitingTime: '20 min',
-            servedAt: '9:30 AM',
-            finishedAt: '9:45 AM',
-            date: 'Sep 5, 2026',
-            status: 'Completed',
-        },
-        {
-            id: 4,
-            user: {
-                image: './images/user/user-20.jpg',
-                name: 'Abram Schleifer',
-                role: 'New Customer',
-            },
-            queueNumber: '#125',
-            server: '—',
-            service: 'Haircut',
-            joinedAt: '9:00 AM',
-            waitingTime: '—',
-            servedAt: '—',
-            finishedAt: '—',
-            date: 'Sep 5, 2026',
-            status: 'Canceled',
-        },
-        {
-            id: 5,
-            user: {
-                image: './images/user/user-21.jpg',
-                name: 'Carla George',
-                role: 'Regular Customer',
-            },
-            queueNumber: '#124',
-            server: 'Server #1',
-            service: 'Haircut & Wash',
-            joinedAt: '8:35 AM',
-            waitingTime: '30 min',
-            servedAt: '9:05 AM',
-            finishedAt: '9:35 AM',
-            date: 'Sep 5, 2026',
-            status: 'Completed',
-        },
-    ],
+    history: [],
+
+    async init() {
+        await this.loadHistory();
+    },
+
+    async loadHistory() {
+        const res = await fetch('/api/queue/history');
+        const page = await res.json();
+        this.history = page.data.map(function(t) {
+            return {
+                id: t.id,
+                user: { image: (t.barber && t.barber.image) || './images/user/user-17.jpg', name: t.customer_name, role: '' },
+                queueNumber: '#' + t.queue_number,
+                server: t.barber ? t.barber.name : '—',
+                service: t.service ? t.service.name : '—',
+                joinedAt: t.joined_at ? new Date(t.joined_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '—',
+                waitingTime: t.waiting_time || '—',
+                servedAt: t.served_at ? new Date(t.served_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '—',
+                finishedAt: t.finished_at ? new Date(t.finished_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '—',
+                date: t.session ? new Date(t.session.session_date).toDateString() : '',
+                status: t.status === 'completed' ? 'Completed' : 'Canceled'
+            };
+        });
+    },
+
     getStatusClass(status) {
         const classes = {
             'Completed': 'bg-green-50 text-green-700 dark:bg-green-500/15 dark:text-green-500',
-            'Canceled': 'bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-500',
-            'No Show': 'bg-gray-100 text-gray-600 dark:bg-gray-500/15 dark:text-gray-400',
+            'Canceled': 'bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-500'
         };
         return classes[status] || '';
     },
+
     getWaitingTimeClass(entry) {
         if (entry.waitingTime === '—') return 'text-gray-400 dark:text-gray-500';
         const minutes = parseInt(entry.waitingTime);
@@ -101,9 +40,11 @@
         if (minutes >= 20) return 'text-yellow-600 dark:text-yellow-400 font-medium';
         return 'text-green-600 dark:text-green-400 font-medium';
     },
+
     viewDetails(entry) {
         console.log('Viewing details for', entry.user.name, entry.queueNumber);
     },
+
     resendReceipt(entry) {
         console.log('Resending receipt to', entry.user.name);
     }
@@ -112,12 +53,8 @@
 
         <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-4 dark:border-gray-800 sm:px-6">
             <div>
-                <h3 class="text-base font-semibold text-gray-800 dark:text-white/90 sm:text-lg">
-                    Queue History
-                </h3>
-                <p class="mt-0.5 text-theme-xs text-gray-500 dark:text-gray-400 sm:text-theme-sm">
-                    Recent customers served today.
-                </p>
+                <h3 class="text-base font-semibold text-gray-800 dark:text-white/90 sm:text-lg">Queue History</h3>
+                <p class="mt-0.5 text-theme-xs text-gray-500 dark:text-gray-400 sm:text-theme-sm">Recent customers served today.</p>
             </div>
         </div>
 
@@ -125,36 +62,16 @@
             <table class="w-full min-w-[1450px]">
                 <thead>
                     <tr class="border-b border-gray-100 dark:border-gray-800">
-                        <th class="px-5 py-3 text-left sm:px-6">
-                            <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Customer</p>
-                        </th>
-                        <th class="px-5 py-3 text-left sm:px-6">
-                            <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Queue Number</p>
-                        </th>
-                        <th class="px-5 py-3 text-left sm:px-6">
-                            <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Service</p>
-                        </th>
-                        <th class="px-5 py-3 text-left sm:px-6">
-                            <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Server</p>
-                        </th>
-                        <th class="px-5 py-3 text-left sm:px-6">
-                            <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Joined Queue</p>
-                        </th>
-                        <th class="px-5 py-3 text-left sm:px-6">
-                            <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Waiting Time</p>
-                        </th>
-                        <th class="px-5 py-3 text-left sm:px-6">
-                            <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Served At</p>
-                        </th>
-                        <th class="px-5 py-3 text-left sm:px-6">
-                            <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Finish At</p>
-                        </th>
-                        <th class="px-5 py-3 text-left sm:px-6">
-                            <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Status</p>
-                        </th>
-                        <th class="px-5 py-3 text-left sm:px-6">
-                            <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Actions</p>
-                        </th>
+                        <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Customer</p></th>
+                        <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Queue Number</p></th>
+                        <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Service</p></th>
+                        <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Server</p></th>
+                        <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Joined Queue</p></th>
+                        <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Waiting Time</p></th>
+                        <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Served At</p></th>
+                        <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Finish At</p></th>
+                        <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Status</p></th>
+                        <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Actions</p></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -171,33 +88,19 @@
                                     </div>
                                 </div>
                             </td>
-                            <td class="px-5 py-4 sm:px-6">
-                                <p class="text-gray-500 text-theme-sm dark:text-gray-400" x-text="entry.queueNumber"></p>
-                            </td>
-                            <td class="px-5 py-4 sm:px-6">
-                                <p class="text-gray-700 text-theme-sm dark:text-gray-300" x-text="entry.service"></p>
-                            </td>
-                            <td class="px-5 py-4 sm:px-6">
-                                <p class="text-gray-500 text-theme-sm dark:text-gray-400" x-text="entry.server"></p>
-                            </td>
+                            <td class="px-5 py-4 sm:px-6"><p class="text-gray-500 text-theme-sm dark:text-gray-400" x-text="entry.queueNumber"></p></td>
+                            <td class="px-5 py-4 sm:px-6"><p class="text-gray-700 text-theme-sm dark:text-gray-300" x-text="entry.service"></p></td>
+                            <td class="px-5 py-4 sm:px-6"><p class="text-gray-500 text-theme-sm dark:text-gray-400" x-text="entry.server"></p></td>
                             <td class="px-5 py-4 sm:px-6">
                                 <div class="flex flex-col">
                                     <span class="text-gray-700 text-theme-sm dark:text-gray-300" x-text="entry.joinedAt"></span>
                                     <span class="text-gray-400 text-theme-xs dark:text-gray-500" x-text="entry.date"></span>
                                 </div>
                             </td>
-                            <td class="px-5 py-4 sm:px-6">
-                                <p class="text-theme-sm" :class="getWaitingTimeClass(entry)" x-text="entry.waitingTime"></p>
-                            </td>
-                            <td class="px-5 py-4 sm:px-6">
-                                <p class="text-gray-700 text-theme-sm dark:text-gray-300" x-text="entry.servedAt"></p>
-                            </td>
-                            <td class="px-5 py-4 sm:px-6">
-                                <p class="text-gray-700 text-theme-sm dark:text-gray-300" x-text="entry.finishedAt"></p>
-                            </td>
-                            <td class="px-5 py-4 sm:px-6">
-                                <p class="text-theme-xs inline-block rounded-full px-2 py-0.5 font-medium" :class="getStatusClass(entry.status)" x-text="entry.status"></p>
-                            </td>
+                            <td class="px-5 py-4 sm:px-6"><p class="text-theme-sm" :class="getWaitingTimeClass(entry)" x-text="entry.waitingTime"></p></td>
+                            <td class="px-5 py-4 sm:px-6"><p class="text-gray-700 text-theme-sm dark:text-gray-300" x-text="entry.servedAt"></p></td>
+                            <td class="px-5 py-4 sm:px-6"><p class="text-gray-700 text-theme-sm dark:text-gray-300" x-text="entry.finishedAt"></p></td>
+                            <td class="px-5 py-4 sm:px-6"><p class="text-theme-xs inline-block rounded-full px-2 py-0.5 font-medium" :class="getStatusClass(entry.status)" x-text="entry.status"></p></td>
                             <td class="px-5 py-4 sm:px-6">
                                 <div class="flex items-center gap-2">
                                     <button
