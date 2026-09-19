@@ -3,14 +3,18 @@
     x-data="{
         selected: 'overview',
         chart: null,
-        seriesData: {
-            overview: { name: 'Customers', data: [2, 5, 8, 12, 15, 10, 18, 22, 19, 14, 9, 4] },
-            peakHours: { name: 'Customers', data: [1, 3, 6, 14, 20, 18, 25, 28, 22, 12, 6, 2] },
-            waitTimes: { name: 'Avg Wait (min)', data: [5, 8, 12, 20, 25, 18, 30, 35, 28, 15, 10, 6] },
-        },
-        initChart() {
+        categories: [],
+        seriesData: { overview: [], peakHours: [], waitTimes: [] },
+        fromDate: null,
+        toDate: null,
+
+        async initChart() {
+            this.toDate = new Date();
+            this.fromDate = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000);
+            await this.fetchData();
+
             this.chart = new ApexCharts(this.$refs.chartThree, {
-                series: [this.seriesData.overview],
+                series: [{ name: 'Customers', data: this.seriesData.overview }],
                 chart: {
                     type: 'area',
                     height: 310,
@@ -20,58 +24,55 @@
                 colors: ['#465FFF'],
                 fill: {
                     type: 'gradient',
-                    gradient: {
-                        shadeIntensity: 1,
-                        opacityFrom: 0.4,
-                        opacityTo: 0,
-                        stops: [0, 90, 100],
-                    },
+                    gradient: { shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0, stops: [0, 90, 100] },
                 },
                 dataLabels: { enabled: false },
                 stroke: { curve: 'smooth', width: 2 },
-                grid: {
-                    borderColor: '#E4E7EC',
-                    strokeDashArray: 4,
-                },
+                grid: { borderColor: '#E4E7EC', strokeDashArray: 4 },
                 xaxis: {
-                    categories: ['9AM', '10AM', '11AM', '12PM', '1PM', '2PM', '3PM', '4PM', '5PM', '6PM', '7PM', '8PM'],
+                    categories: this.categories,
                     axisBorder: { show: false },
                     axisTicks: { show: false },
                 },
                 tooltip: {
-                    y: {
-                        formatter: (val) => this.selected === 'waitTimes' ? val + ' min' : val + ' customers',
-                    },
+                    y: { formatter: (val) => this.selected === 'waitTimes' ? val + ' min' : val + ' customers' },
                 },
-                responsive: [
-                    {
-                        breakpoint: 640,
-                        options: { chart: { height: 240 } },
-                    },
-                ],
+                responsive: [{ breakpoint: 640, options: { chart: { height: 240 } } }],
             });
             this.chart.render();
         },
+
+        async fetchData() {
+            const from = this.fromDate.toISOString().slice(0, 10);
+            const to = this.toDate.toISOString().slice(0, 10);
+            const res = await fetch('/api/stats/hourly?from=' + from + '&to=' + to);
+            const d = await res.json();
+            this.categories = d.categories;
+            this.seriesData = { overview: d.overview, peakHours: d.peakHours, waitTimes: d.waitTimes };
+        },
+
         switchTab(tab) {
             this.selected = tab;
-            const series = this.seriesData[tab];
-            this.chart.updateSeries([series]);
+            this.chart.updateSeries([{ name: tab === 'waitTimes' ? 'Avg Wait (min)' : 'Customers', data: this.seriesData[tab] }]);
+        },
+
+        async onDateRangeChange(fromStr, toStr) {
+            this.fromDate = new Date(fromStr);
+            this.toDate = new Date(toStr);
+            await this.fetchData();
+            this.chart.updateOptions({ xaxis: { categories: this.categories } });
+            this.chart.updateSeries([{ data: this.seriesData[this.selected] }]);
         }
     }"
     x-init="initChart()">
     <div class="flex flex-col gap-5 mb-6 sm:flex-row sm:justify-between">
         <div class="w-full">
-            <h3 class="text-lg font-semibold text-gray-800 dark:text-white/90">
-                Queue Statistics
-            </h3>
-            <p class="mt-1 text-gray-500 text-theme-sm dark:text-gray-400">
-                Queue trends across the day
-            </p>
+            <h3 class="text-lg font-semibold text-gray-800 dark:text-white/90">Queue Statistics</h3>
+            <p class="mt-1 text-gray-500 text-theme-sm dark:text-gray-400">Queue trends across the day</p>
         </div>
 
         <div class="flex items-start w-full gap-3 sm:justify-end">
             <div class="inline-flex w-fit items-center gap-0.5 rounded-lg bg-gray-100 p-0.5 dark:bg-gray-900">
-
                 @php
                     $options = [
                         ['value' => 'overview', 'label' => 'Overview'],
@@ -79,7 +80,6 @@
                         ['value' => 'waitTimes', 'label' => 'Wait Times'],
                     ];
                 @endphp
-
                 @foreach ($options as $option)
                     <button @click="switchTab('{{ $option['value'] }}')"
                         :class="selected === '{{ $option['value'] }}' ?
@@ -93,6 +93,7 @@
 
             <div x-data="{
                 init() {
+                    const parent = this;
                     flatpickr(this.$refs.datepicker, {
                         mode: 'range',
                         static: true,
@@ -110,6 +111,9 @@
                         },
                         onChange: (selectedDates, dateStr, instance) => {
                             instance.element.value = dateStr.replace('to', '-');
+                            if (selectedDates.length === 2) {
+                                parent.$root.__x.$data.onDateRangeChange(selectedDates[0], selectedDates[1]);
+                            }
                         },
                     })
                 }
@@ -121,7 +125,6 @@
                     </svg>
                 </div>
             </div>
-
         </div>
     </div>
     <div class="max-w-full overflow-x-auto custom-scrollbar">

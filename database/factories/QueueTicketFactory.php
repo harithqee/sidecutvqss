@@ -3,6 +3,9 @@
 namespace Database\Factories;
 
 use Illuminate\Database\Eloquent\Factories\Factory;
+use App\Models\QueueSession;
+use App\Models\Barber;
+use App\Models\Service;
 
 /**
  * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\QueueTicket>

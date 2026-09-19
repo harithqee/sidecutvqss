@@ -17,11 +17,23 @@
             errors: {},
             queueNumber: null,
             estimatedWait: null,
+            barbers: [],
+            submitting: false,
+            serverError: '',
 
-            barbers: [
-                { id: 1, name: 'Server #1', role: 'Senior Barber', active: true },
-                { id: 2, name: 'Server #2', role: 'Junior Barber', active: true },
-            ],
+            async init() {
+                await this.loadBarbers();
+            },
+
+            async loadBarbers() {
+                const res = await fetch('/api/barbers');
+                const data = await res.json();
+                this.barbers = data
+                    .filter(function(b) { return b.is_active; })
+                    .map(function(b) {
+                        return { id: b.id, name: b.name, role: b.role, active: b.is_active };
+                    });
+            },
 
             validate() {
                 this.errors = {};
@@ -36,16 +48,39 @@
                 return Object.keys(this.errors).length === 0;
             },
 
-            submitForm() {
+            async submitForm() {
                 if (!this.validate()) return;
-                this.queueNumber = Math.floor(Math.random() * 30) + 100;
-                this.estimatedWait = Math.floor(Math.random() * 20) + 10;
+                this.submitting = true;
+                this.serverError = '';
+
+                const res = await fetch('/api/queue', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    body: JSON.stringify({
+                        customer_name: this.form.name,
+                        customer_phone: this.form.phone,
+                        barber_id: this.form.barberId || null
+                    })
+                });
+
+                this.submitting = false;
+
+                if (!res.ok) {
+                    const body = await res.json();
+                    this.serverError = body.message || 'Something went wrong. Please try again.';
+                    return;
+                }
+
+                const data = await res.json();
+                this.queueNumber = data.ticket.queue_number;
+                this.estimatedWait = data.estimated_wait_minutes;
                 this.step = 'confirmation';
             },
 
             resetForm() {
                 this.form = { name: '', phone: '', barberId: '' };
                 this.errors = {};
+                this.serverError = '';
                 this.step = 'form';
             }
         }">
@@ -64,6 +99,8 @@
 
             <template x-if="step === 'form'">
                 <div class="rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-sm dark:border-gray-800 dark:bg-white/[0.03]">
+
+                    <p x-show="serverError" x-text="serverError" class="mb-4 rounded-lg bg-red-50 px-3 py-2 text-theme-xs text-red-600 dark:bg-red-500/15 dark:text-red-400"></p>
 
                     <div class="mb-4">
                         <label class="mb-1.5 block text-theme-sm font-medium text-gray-700 dark:text-gray-300">
@@ -112,9 +149,10 @@
                     <button
                         @click="submitForm()"
                         type="button"
-                        class="flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand-500 text-theme-sm font-semibold text-white shadow-theme-xs transition hover:bg-brand-600">
-                        Join Queue
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none">
+                        :disabled="submitting"
+                        class="flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-brand-500 text-theme-sm font-semibold text-white shadow-theme-xs transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60">
+                        <span x-text="submitting ? 'Joining...' : 'Join Queue'"></span>
+                        <svg x-show="!submitting" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none">
                             <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                         </svg>
                     </button>

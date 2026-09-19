@@ -19,11 +19,58 @@
         </div>
 
         <!-- Barber Performance -->
-        <x-common.component-card title="Barber Performance Today">
-            <div class="custom-scrollbar max-w-full overflow-x-auto">
-                <div id="chartBarberPerf" class="min-w-[600px]"></div>
-            </div>
-        </x-common.component-card>
+        <div x-data="{
+            chart: null,
+
+            async initChart() {
+                const res = await fetch('/api/stats/barber-performance');
+                const data = await res.json();
+
+                this.chart = new ApexCharts(this.$refs.chartBarberPerf, {
+                    series: [{
+                        name: 'Customers Served',
+                        data: data.map(function(b) { return b.completed; }),
+                    }],
+                    chart: {
+                        type: 'bar',
+                        height: 250,
+                        fontFamily: 'Outfit, sans-serif',
+                        toolbar: { show: false },
+                    },
+                    plotOptions: {
+                        bar: {
+                            horizontal: true,
+                            borderRadius: 6,
+                            barHeight: '40%',
+                        },
+                    },
+                    colors: ['#039855'],
+                    dataLabels: { enabled: true },
+                    xaxis: {
+                        categories: data.map(function(b) { return b.name; }),
+                        axisBorder: { show: false },
+                        axisTicks: { show: false },
+                    },
+                    grid: {
+                        borderColor: '#E4E7EC',
+                        strokeDashArray: 4,
+                    },
+                    responsive: [
+                        {
+                            breakpoint: 640,
+                            options: { chart: { height: 200 } },
+                        },
+                    ],
+                });
+                this.chart.render();
+            }
+        }" x-init="initChart()">
+            <x-common.component-card title="Barber Performance Today">
+                <div class="custom-scrollbar max-w-full overflow-x-auto">
+                    <div x-ref="chartBarberPerf" class="min-w-[600px]"></div>
+                </div>
+            </x-common.component-card>
+        </div>
 
     </div>
 @endsection

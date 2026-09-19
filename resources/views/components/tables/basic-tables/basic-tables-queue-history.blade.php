@@ -1,5 +1,12 @@
 <div x-data="{
     history: [],
+    toast: { show: false, message: '', type: 'success' },
+
+    showToast(message, type) {
+        this.toast.message = message;
+        this.toast.type = type || 'success';
+        this.toast.show = true;
+    },
 
     async init() {
         await this.loadHistory();
@@ -42,15 +49,38 @@
     },
 
     viewDetails(entry) {
-        console.log('Viewing details for', entry.user.name, entry.queueNumber);
+        this.showToast('Queue #' + entry.queueNumber + ' — ' + entry.user.name, 'success');
     },
 
     resendReceipt(entry) {
-        console.log('Resending receipt to', entry.user.name);
+        this.showToast('Receipt resent to ' + entry.user.name + '.', 'success');
     }
 }">
-    <div class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
 
+    <!-- Popup alert -->
+    <div x-show="toast.show" x-cloak class="fixed inset-0 z-999 flex items-center justify-center bg-black/40 px-4" style="display: none;">
+        <div x-show="toast.show"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0 scale-95"
+             x-transition:enter-end="opacity-100 scale-100"
+             @click.away="toast.show = false"
+             class="w-full max-w-sm rounded-xl bg-white p-6 text-center shadow-theme-lg dark:bg-gray-900">
+            <div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full"
+                 :class="toast.type === 'success' ? 'bg-green-50 dark:bg-green-500/15' : 'bg-red-50 dark:bg-red-500/15'">
+                <svg x-show="toast.type === 'success'" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green-600 dark:text-green-400"/>
+                </svg>
+                <svg x-show="toast.type === 'error'" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-red-600 dark:text-red-400"/>
+                </svg>
+            </div>
+            <h3 class="mb-1 text-base font-semibold text-gray-800 dark:text-white/90" x-text="toast.type === 'success' ? 'Success' : 'Failed'"></h3>
+            <p class="mb-5 text-theme-sm text-gray-500 dark:text-gray-400" x-text="toast.message"></p>
+            <button @click="toast.show = false" type="button" class="w-full rounded-lg bg-brand-500 px-4 py-2.5 text-theme-sm font-medium text-white transition hover:bg-brand-600">OK</button>
+        </div>
+    </div>
+
+    <div class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
         <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-4 dark:border-gray-800 sm:px-6">
             <div>
                 <h3 class="text-base font-semibold text-gray-800 dark:text-white/90 sm:text-lg">Queue History</h3>
@@ -59,9 +89,10 @@
         </div>
 
         <div class="max-w-full overflow-x-auto custom-scrollbar">
-            <table class="w-full min-w-[1450px]">
+            <table class="w-full min-w-[1500px]">
                 <thead>
                     <tr class="border-b border-gray-100 dark:border-gray-800">
+                        <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">ID</p></th>
                         <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Customer</p></th>
                         <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Queue Number</p></th>
                         <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Service</p></th>
@@ -77,11 +108,10 @@
                 <tbody>
                     <template x-for="entry in history" :key="entry.id">
                         <tr class="border-b border-gray-100 dark:border-gray-800">
+                            <td class="px-5 py-4 sm:px-6"><span class="text-gray-500 text-theme-sm dark:text-gray-400" x-text="entry.id"></span></td>
                             <td class="px-5 py-4 sm:px-6">
                                 <div class="flex items-center gap-3">
-                                    <div class="w-10 h-10 overflow-hidden rounded-full">
-                                        <img :src="entry.user.image" :alt="entry.user.name">
-                                    </div>
+                                    <div class="w-10 h-10 overflow-hidden rounded-full"><img :src="entry.user.image" :alt="entry.user.name"></div>
                                     <div>
                                         <span class="block font-medium text-gray-800 text-theme-sm dark:text-white/90" x-text="entry.user.name"></span>
                                         <span class="block text-gray-500 text-theme-xs dark:text-gray-400" x-text="entry.user.role"></span>
@@ -103,21 +133,14 @@
                             <td class="px-5 py-4 sm:px-6"><p class="text-theme-xs inline-block rounded-full px-2 py-0.5 font-medium" :class="getStatusClass(entry.status)" x-text="entry.status"></p></td>
                             <td class="px-5 py-4 sm:px-6">
                                 <div class="flex items-center gap-2">
-                                    <button
-                                        @click="viewDetails(entry)"
-                                        type="button"
-                                        title="View details"
+                                    <button @click="viewDetails(entry)" type="button" title="View details"
                                         class="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white p-2 text-gray-600 shadow-theme-xs transition hover:bg-gray-50 dark:border-gray-700 dark:bg-white/[0.03] dark:text-gray-300 dark:hover:bg-white/[0.05]">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none">
                                             <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                                             <circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5"/>
                                         </svg>
                                     </button>
-                                    <button
-                                        @click="resendReceipt(entry)"
-                                        type="button"
-                                        :disabled="entry.status === 'Canceled'"
-                                        title="Resend receipt"
+                                    <button @click="resendReceipt(entry)" type="button" :disabled="entry.status === 'Canceled'" title="Resend receipt"
                                         class="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white p-2 text-gray-600 shadow-theme-xs transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-700 dark:bg-white/[0.03] dark:text-gray-300 dark:hover:bg-white/[0.05]">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24">
                                             <path d="M0 0h24v24H0z" fill="none" />

@@ -4,19 +4,20 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class StoreMessageTemplateRequest extends FormRequest
+class UpdateMessageTemplateRequest extends FormRequest
 {
-    public function authorize(): bool { return true; }
+    public function authorize(): bool
+    {
+        return true;
+    }
 
     public function rules(): array
     {
         return [
-            'name' => ['required', 'string', 'max:100'],
-            'trigger_event' => ['required', 'string', 'max:100'],
-            'message_body' => ['required', 'string', 'max:500'],
-            'is_active' => ['boolean'],
+            'name' => ['sometimes', 'required', 'string', 'max:100'],
+            'trigger_event' => ['sometimes', 'required', 'string', 'max:100'],
+            'message_body' => ['sometimes', 'required', 'string', 'max:500'],
+            'is_active' => ['sometimes', 'boolean'],
         ];
     }
 }
-
-// UpdateMessageTemplateRequest — identical but with 'sometimes' prefixed on each rule

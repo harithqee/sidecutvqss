@@ -6,7 +6,10 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class StoreMessageTemplateRequest extends FormRequest
 {
-    public function authorize(): bool { return true; }
+    public function authorize(): bool
+    {
+        return true;
+    }
 
     public function rules(): array
     {
@@ -18,5 +21,3 @@ class StoreMessageTemplateRequest extends FormRequest
         ];
     }
 }
-
-// UpdateMessageTemplateRequest — identical but with 'sometimes' prefixed on each rule
