@@ -1,22 +1,40 @@
 <div class="col-span-12 xl:col-span-6"
      x-data="{
-         barbers: [
-             { name: 'Server #1', role: 'Senior Barber', img: './images/user/user-17.jpg', active: true },
-             { name: 'Server #2', role: 'Junior Barber', img: './images/user/user-18.jpg', active: false },
-         ],
+         barbers: [],
+         queueCount: 0,
+
          get anyBarberActive() {
              return this.barbers.some(b => b.active);
          },
-         get queueCount() {
-             return this.anyBarberActive ? 3782 : 0;
+
+         async init() {
+             await this.loadBarbers();
+             await this.loadQueueCount();
+         },
+
+         async loadBarbers() {
+             const res = await fetch('/api/barbers');
+             const data = await res.json();
+             this.barbers = data.map(function(b) {
+                 return {
+                     name: b.name,
+                     role: b.role,
+                     img: b.image || './images/user/user-01.jpg',
+                     active: b.is_active,
+                 };
+             });
+         },
+
+         async loadQueueCount() {
+             const res = await fetch('/api/queue');
+             const tickets = await res.json();
+             this.queueCount = tickets.length;
          }
      }">
 
     <div class="flex h-full flex-col rounded-2xl border border-gray-200 bg-gray-100 dark:border-gray-800 dark:bg-white/[0.03]">
-        
-        <!-- Main Top Card (Server Status List) -->
+
         <div class="shadow-default flex flex-1 flex-col rounded-2xl bg-white px-4 pb-6 pt-5 dark:bg-gray-900 sm:px-6 sm:pb-6 sm:pt-6">
-            <!-- Header: Icon & Title -->
             <div class="mb-6 flex items-center gap-4">
                 <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gray-100 dark:bg-gray-800">
                     <svg class="fill-gray-800 dark:fill-white/90" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -29,7 +47,6 @@
                 </div>
             </div>
 
-            <!-- Scrollable, responsive list -->
             <div class="flex max-h-[220px] flex-col gap-5 overflow-y-auto pr-1 sm:max-h-[260px] lg:max-h-[300px]
                         [&::-webkit-scrollbar]:w-1.5
                         [&::-webkit-scrollbar-track]:bg-transparent
@@ -38,7 +55,6 @@
                         dark:[&::-webkit-scrollbar-thumb]:bg-gray-700">
                 <template x-for="(barber, index) in barbers" :key="index">
                     <div class="flex items-center justify-between gap-3">
-                        <!-- Left side: Avatar & Name -->
                         <div class="flex min-w-0 items-center gap-3">
                             <img :src="barber.img" :alt="barber.name" class="h-11 w-11 shrink-0 rounded-full object-cover shadow-sm" />
                             <div class="flex min-w-0 flex-col">
@@ -46,8 +62,6 @@
                                 <span class="truncate text-xs font-medium text-gray-500 dark:text-gray-400" x-text="barber.role"></span>
                             </div>
                         </div>
-
-                        <!-- Right side: Status -->
                         <span class="flex shrink-0 items-center gap-2 text-sm font-medium transition-colors duration-300"
                               :class="barber.active ? 'text-green-500' : 'text-red-500'">
                             <svg class="h-2.5 w-2.5 fill-current" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg">
@@ -59,20 +73,14 @@
                 </template>
             </div>
 
-            <!-- Optional: Warning message when no barbers active -->
             <div x-show="!anyBarberActive" x-cloak class="mt-6 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-500/15 dark:text-red-400">
                 No servers are currently active. Queue is paused.
             </div>
         </div>
 
-        <!-- Bottom Stats (Queue Status) -->
         <div class="flex flex-wrap items-center justify-center gap-4 px-4 py-3.5 sm:gap-8 sm:px-6 sm:py-5">
-
-            <!-- In Queue Now -->
             <div class="min-w-[70px]">
-                <p class="mb-1 text-center text-theme-xs text-gray-500 dark:text-gray-400 sm:text-sm">
-                    In Queue Now
-                </p>
+                <p class="mb-1 text-center text-theme-xs text-gray-500 dark:text-gray-400 sm:text-sm">In Queue Now</p>
                 <p class="flex items-center justify-center gap-1 text-sm font-semibold text-gray-800 dark:text-white/90 sm:text-lg">
                     <span x-text="queueCount" class="transition-all duration-300"></span>
                 </p>
@@ -80,11 +88,8 @@
 
             <div class="h-7 w-px bg-gray-200 dark:bg-gray-800"></div>
 
-            <!-- Queue Status -->
             <div class="min-w-[70px]">
-                <p class="mb-1 text-center text-theme-xs text-gray-500 dark:text-gray-400 sm:text-sm">
-                    Queue Status
-                </p>
+                <p class="mb-1 text-center text-theme-xs text-gray-500 dark:text-gray-400 sm:text-sm">Queue Status</p>
                 <div class="flex items-center justify-center">
                     <span class="flex items-center gap-1 rounded-full py-0.5 pl-2 pr-2.5 text-sm font-medium transition-colors duration-300"
                           :class="anyBarberActive ? 'bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500' : 'bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-500'">
@@ -95,7 +100,6 @@
                     </span>
                 </div>
             </div>
-
         </div>
     </div>
 </div>

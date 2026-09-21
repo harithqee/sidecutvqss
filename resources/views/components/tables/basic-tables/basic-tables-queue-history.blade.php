@@ -1,5 +1,6 @@
 <div x-data="{
     history: [],
+    searchDate: '',
     toast: { show: false, message: '', type: 'success' },
 
     showToast(message, type) {
@@ -13,15 +14,17 @@
     },
 
     async loadHistory() {
-        const res = await fetch('/api/queue/history');
+        const url = this.searchDate
+            ? '/api/queue/history?date=' + this.searchDate
+            : '/api/queue/history';
+        const res = await fetch(url);
         const page = await res.json();
         this.history = page.data.map(function(t) {
             return {
                 id: t.id,
-                user: { image: (t.barber && t.barber.image) || './images/user/user-17.jpg', name: t.customer_name, role: '' },
-                queueNumber: '#' + t.queue_number,
+                name: t.customer_name,
+                phone: t.customer_phone,
                 server: t.barber ? t.barber.name : '—',
-                service: t.service ? t.service.name : '—',
                 joinedAt: t.joined_at ? new Date(t.joined_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '—',
                 waitingTime: t.waiting_time || '—',
                 servedAt: t.served_at ? new Date(t.served_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '—',
@@ -30,6 +33,11 @@
                 status: t.status === 'completed' ? 'Completed' : 'Canceled'
             };
         });
+    },
+
+    clearSearch() {
+        this.searchDate = '';
+        this.loadHistory();
     },
 
     getStatusClass(status) {
@@ -49,11 +57,11 @@
     },
 
     viewDetails(entry) {
-        this.showToast('Queue #' + entry.queueNumber + ' — ' + entry.user.name, 'success');
+        this.showToast(entry.phone + ' — ' + entry.name, 'success');
     },
 
     resendReceipt(entry) {
-        this.showToast('Receipt resent to ' + entry.user.name + '.', 'success');
+        this.showToast('Receipt resent to ' + entry.name + '.', 'success');
     }
 }">
 
@@ -86,16 +94,30 @@
                 <h3 class="text-base font-semibold text-gray-800 dark:text-white/90 sm:text-lg">Queue History</h3>
                 <p class="mt-0.5 text-theme-xs text-gray-500 dark:text-gray-400 sm:text-theme-sm">Recent customers served today.</p>
             </div>
+            <div class="flex items-center gap-2">
+                <input
+                    type="date"
+                    x-model="searchDate"
+                    @change="loadHistory()"
+                    class="h-10 rounded-lg border border-gray-300 bg-transparent px-3 text-theme-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90" />
+                <button
+                    x-show="searchDate"
+                    @click="clearSearch()"
+                    type="button"
+                    title="Clear date filter"
+                    class="inline-flex h-10 items-center justify-center rounded-lg border border-gray-300 px-3 text-theme-xs font-medium text-gray-600 transition hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.05]">
+                    Clear
+                </button>
+            </div>
         </div>
 
         <div class="max-w-full overflow-x-auto custom-scrollbar">
-            <table class="w-full min-w-[1500px]">
+            <table class="w-full min-w-[1250px]">
                 <thead>
                     <tr class="border-b border-gray-100 dark:border-gray-800">
                         <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">ID</p></th>
                         <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Customer</p></th>
-                        <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Queue Number</p></th>
-                        <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Service</p></th>
+                        <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Phone Number</p></th>
                         <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Server</p></th>
                         <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Joined Queue</p></th>
                         <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Waiting Time</p></th>
@@ -109,17 +131,8 @@
                     <template x-for="entry in history" :key="entry.id">
                         <tr class="border-b border-gray-100 dark:border-gray-800">
                             <td class="px-5 py-4 sm:px-6"><span class="text-gray-500 text-theme-sm dark:text-gray-400" x-text="entry.id"></span></td>
-                            <td class="px-5 py-4 sm:px-6">
-                                <div class="flex items-center gap-3">
-                                    <div class="w-10 h-10 overflow-hidden rounded-full"><img :src="entry.user.image" :alt="entry.user.name"></div>
-                                    <div>
-                                        <span class="block font-medium text-gray-800 text-theme-sm dark:text-white/90" x-text="entry.user.name"></span>
-                                        <span class="block text-gray-500 text-theme-xs dark:text-gray-400" x-text="entry.user.role"></span>
-                                    </div>
-                                </div>
-                            </td>
-                            <td class="px-5 py-4 sm:px-6"><p class="text-gray-500 text-theme-sm dark:text-gray-400" x-text="entry.queueNumber"></p></td>
-                            <td class="px-5 py-4 sm:px-6"><p class="text-gray-700 text-theme-sm dark:text-gray-300" x-text="entry.service"></p></td>
+                            <td class="px-5 py-4 sm:px-6"><span class="font-medium text-gray-800 text-theme-sm dark:text-white/90" x-text="entry.name"></span></td>
+                            <td class="px-5 py-4 sm:px-6"><p class="text-gray-500 text-theme-sm dark:text-gray-400" x-text="entry.phone"></p></td>
                             <td class="px-5 py-4 sm:px-6"><p class="text-gray-500 text-theme-sm dark:text-gray-400" x-text="entry.server"></p></td>
                             <td class="px-5 py-4 sm:px-6">
                                 <div class="flex flex-col">

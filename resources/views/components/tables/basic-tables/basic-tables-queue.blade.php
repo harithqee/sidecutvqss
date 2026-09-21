@@ -8,6 +8,11 @@
         this.toast.show = true;
     },
 
+    randomUserImage() {
+        const num = Math.floor(Math.random() * 30) + 1;
+        return './images/user/user-' + String(num).padStart(2, '0') + '.jpg';
+    },
+
     async init() {
         await this.loadOrders();
     },
@@ -15,11 +20,12 @@
     async loadOrders() {
         const res = await fetch('/api/queue');
         const tickets = await res.json();
+        const self = this;
         this.orders = tickets.map(function(t) {
             return {
                 id: t.id,
                 user: {
-                    image: (t.barber && t.barber.image) || './images/user/user-17.jpg',
+                    image: self.randomUserImage(),
                     name: t.customer_name,
                     role: (t.service && t.service.name) || ''
                 },
@@ -54,10 +60,19 @@
             this.showToast('Could not update status.', 'error');
             return;
         }
-        this.orders = this.orders.filter(function(o) {
-            return o.id !== order.id;
-        });
-        this.showToast(status === 'completed' ? 'Ticket marked as completed.' : 'Ticket canceled.', 'success');
+        if (status === 'serving') {
+            order.status = 'serving';
+            this.showToast('Customer is now being served.', 'success');
+        } else {
+            this.orders = this.orders.filter(function(o) {
+                return o.id !== order.id;
+            });
+            this.showToast(status === 'completed' ? 'Ticket marked as completed.' : 'Ticket canceled.', 'success');
+        }
+    },
+
+    startServing(order) {
+        this.updateStatus(order, 'serving');
     },
 
     completeOrder(order) {
@@ -107,7 +122,7 @@
 
     <div class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
         <div class="max-w-full overflow-x-auto custom-scrollbar">
-            <table class="w-full min-w-[1150px]">
+            <table class="w-full min-w-[1250px]">
                 <thead>
                     <tr class="border-b border-gray-100 dark:border-gray-800">
                         <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">ID</p></th>
@@ -142,6 +157,15 @@
                                         </svg>
                                         SMS
                                     </button>
+                                    <template x-if="order.status === 'in_queue'">
+                                        <button @click="startServing(order)" type="button"
+                                            class="inline-flex items-center gap-1.5 rounded-lg bg-yellow-500 px-3 py-2 text-theme-xs font-medium text-white shadow-theme-xs transition hover:bg-yellow-600">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                                <path d="M6 4l14 8-14 8V4z" fill="currentColor"/>
+                                            </svg>
+                                            Serving
+                                        </button>
+                                    </template>
                                     <button @click="completeOrder(order)" type="button" :disabled="order.status === 'completed' || order.status === 'canceled'"
                                         class="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-2 text-theme-xs font-medium text-white shadow-theme-xs transition hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400 dark:disabled:bg-gray-700 dark:disabled:text-gray-500">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>

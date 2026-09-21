@@ -25,6 +25,7 @@ Route::prefix('queue')->group(function () {
     Route::post('/', [QueueTicketController::class, 'store']);
     Route::patch('/{ticket}/status', [QueueTicketController::class, 'updateStatus']);
     Route::post('/{ticket}/sms', [QueueTicketController::class, 'sendSms']);
+    Route::get('/lookup', [QueueTicketController::class, 'lookup']);
 });
 
 Route::apiResource('message-templates', MessageTemplateController::class)
@@ -38,3 +39,4 @@ Route::prefix('stats')->group(function () {
     Route::get('/monthly-report', [StatisticsController::class, 'monthlyReport']);
     Route::get('/barber-performance', [StatisticsController::class, 'barberPerformance']);
 });
+

@@ -16,10 +16,15 @@
             this.chart = new ApexCharts(this.$refs.chartThree, {
                 series: [{ name: 'Customers', data: this.seriesData.overview }],
                 chart: {
-                    type: 'area',
-                    height: 310,
+                    type: 'area', // or 'bar', keep whatever it already is
+                    height: 310,  // keep whatever it already is
                     fontFamily: 'Outfit, sans-serif',
                     toolbar: { show: false },
+                    animations: {
+                        enabled: true
+                    },
+                    redrawOnWindowResize: false,
+                    redrawOnParentResize: false,
                 },
                 colors: ['#465FFF'],
                 fill: {
@@ -92,32 +97,31 @@
             </div>
 
             <div x-data="{
-                init() {
-                    const parent = this;
-                    flatpickr(this.$refs.datepicker, {
-                        mode: 'range',
-                        static: true,
-                        monthSelectorType: 'static',
-                        dateFormat: 'M j',
-                        defaultDate: [new Date(Date.now() - 6 * 24 * 60 * 60 * 1000), new Date()],
-                        prevArrow: '<svg class=\'stroke-current\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\' fill=\'none\' xmlns=\'http://www.w3.org/2000/svg\'><path d=\'M15.25 6L9 12.25L15.25 18.5\' stroke=\'\' stroke-width=\'1.5\' stroke-linecap=\'round\' stroke-linejoin=\'round\'/></svg>',
-                        nextArrow: '<svg class=\'stroke-current\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\' fill=\'none\' xmlns=\'http://www.w3.org/2000/svg\'><path d=\'M8.75 19L15 12.75L8.75 6.5\' stroke=\'\' stroke-width=\'1.5\' stroke-linecap=\'round\' stroke-linejoin=\'round\'/></svg>',
-                        onReady: (selectedDates, dateStr, instance) => {
-                            instance.element.value = dateStr.replace('to', '-');
-                            const customClass = instance.element.getAttribute('data-class');
-                            if (instance.calendarContainer) {
-                                instance.calendarContainer.classList.add(customClass);
-                            }
-                        },
-                        onChange: (selectedDates, dateStr, instance) => {
-                            instance.element.value = dateStr.replace('to', '-');
-                            if (selectedDates.length === 2) {
-                                parent.$root.__x.$data.onDateRangeChange(selectedDates[0], selectedDates[1]);
-                            }
-                        },
-                    })
+    init() {
+        flatpickr(this.$refs.datepicker, {
+            mode: 'range',
+            static: true,
+            monthSelectorType: 'static',
+            dateFormat: 'M j',
+            defaultDate: [new Date(Date.now() - 6 * 24 * 60 * 60 * 1000), new Date()],
+            prevArrow: '<svg class=\'stroke-current\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\' fill=\'none\' xmlns=\'http://www.w3.org/2000/svg\'><path d=\'M15.25 6L9 12.25L15.25 18.5\' stroke=\'\' stroke-width=\'1.5\' stroke-linecap=\'round\' stroke-linejoin=\'round\'/></svg>',
+            nextArrow: '<svg class=\'stroke-current\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\' fill=\'none\' xmlns=\'http://www.w3.org/2000/svg\'><path d=\'M8.75 19L15 12.75L8.75 6.5\' stroke=\'\' stroke-width=\'1.5\' stroke-linecap=\'round\' stroke-linejoin=\'round\'/></svg>',
+            onReady: (selectedDates, dateStr, instance) => {
+                instance.element.value = dateStr.replace('to', '-');
+                const customClass = instance.element.getAttribute('data-class');
+                if (instance.calendarContainer) {
+                    instance.calendarContainer.classList.add(customClass);
                 }
-            }" class="relative max-w-40">
+            },
+            onChange: (selectedDates, dateStr, instance) => {
+                instance.element.value = dateStr.replace('to', '-');
+                if (selectedDates.length === 2) {
+                    this.$dispatch('date-range-changed', { from: selectedDates[0], to: selectedDates[1] });
+                }
+            },
+        })
+    }
+}" class="relative max-w-40">
                 <input x-ref="datepicker" class="h-10 w-full max-w-11 rounded-lg border border-gray-200 bg-white py-2.5 pl-[34px] pr-4 text-theme-sm font-medium text-gray-700 shadow-theme-xs focus:outline-hidden focus:ring-0 focus-visible:outline-hidden dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 xl:max-w-fit xl:pl-11" placeholder="Select dates" data-class="flatpickr-right" readonly="readonly" />
                 <div class="absolute inset-0 right-auto flex items-center pointer-events-none left-4">
                     <svg class="fill-gray-700 dark:fill-gray-400" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">

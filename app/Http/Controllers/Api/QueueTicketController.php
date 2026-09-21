@@ -100,9 +100,41 @@ class QueueTicketController extends Controller
         'status' => 'pending',
     ]);
 
+
     // Dispatch to your SMS provider job/queue here, e.g.:
     // SendSmsJob::dispatch($log);
 
     return response()->json($log, 201);
+}
+public function lookup(Request $request): JsonResponse
+{
+    $request->validate([
+        'queue_number' => ['required', 'integer'],
+    ]);
+
+    $session = QueueSession::today();
+
+    $ticket = $session->tickets()
+        ->with(['barber', 'service'])
+        ->where('queue_number', $request->queue_number)
+        ->first();
+
+    if (!$ticket) {
+        return response()->json(['message' => 'No ticket found with that queue number today.'], 404);
+    }
+
+    $position = null;
+    if (in_array($ticket->status, ['in_queue', 'serving'])) {
+        $position = $session->tickets()
+            ->whereIn('status', ['in_queue', 'serving'])
+            ->where('queue_number', '<=', $ticket->queue_number)
+            ->count();
+    }
+
+    return response()->json([
+        'ticket' => $ticket,
+        'position' => $position,
+        'estimated_wait_minutes' => $position ? max(0, ($position - 1) * 15) : null,
+    ]);
 }
 }
