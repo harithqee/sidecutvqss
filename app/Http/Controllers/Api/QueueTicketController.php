@@ -29,18 +29,22 @@ class QueueTicketController extends Controller
 
     // Queue History: completed/canceled tickets, most recent first
     public function history(Request $request): JsonResponse
-    {
-        $tickets = QueueTicket::with(['barber', 'service', 'session'])
-            ->whereIn('status', ['completed', 'canceled'])
-            ->when($request->date, fn ($q) => $q->whereHas(
-                'session',
-                fn ($s) => $s->whereDate('session_date', $request->date)
-            ))
-            ->latest('finished_at')
-            ->paginate(20);
+{
+    $tickets = QueueTicket::with(['barber', 'service', 'session'])
+        ->whereIn('status', ['completed', 'canceled'])
+        ->when($request->date, fn ($q) => $q->whereHas(
+            'session',
+            fn ($s) => $s->whereDate('session_date', $request->date)
+        ))
+        ->when($request->from && $request->to, fn ($q) => $q->whereHas(
+            'session',
+            fn ($s) => $s->whereBetween('session_date', [$request->from, $request->to])
+        ))
+        ->latest('finished_at')
+        ->paginate(20);
 
-        return response()->json($tickets);
-    }
+    return response()->json($tickets);
+}
 
     public function store(StoreQueueTicketRequest $request): JsonResponse
     {

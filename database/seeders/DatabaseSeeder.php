@@ -119,5 +119,8 @@ class DatabaseSeeder extends Seeder
                 'joined_at' => now()->subHours(3),
             ]
         );
+
+        $this->call(QueueTicketSeeder::class);
+        
     }
 }

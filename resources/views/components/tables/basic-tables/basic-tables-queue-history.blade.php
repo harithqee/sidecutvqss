@@ -1,6 +1,13 @@
 <div x-data="{
     history: [],
-    searchDate: '',
+    fromDate: null,
+    toDate: null,
+    currentPage: 1,
+    lastPage: 1,
+    total: 0,
+    perPage: 10,
+    from: 0,
+    to: 0,
     toast: { show: false, message: '', type: 'success' },
 
     showToast(message, type) {
@@ -9,17 +16,28 @@
         this.toast.show = true;
     },
 
+    formatLocalDate(d) {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return year + '-' + month + '-' + day;
+    },
+
     async init() {
         await this.loadHistory();
     },
 
-    async loadHistory() {
-        const url = this.searchDate
-            ? '/api/queue/history?date=' + this.searchDate
-            : '/api/queue/history';
+    async loadHistory(page) {
+        page = page || 1;
+        let url = '/api/queue/history?page=' + page;
+        if (this.fromDate && this.toDate) {
+            const from = this.formatLocalDate(this.fromDate);
+            const to = this.formatLocalDate(this.toDate);
+            url += '&from=' + from + '&to=' + to;
+        }
         const res = await fetch(url);
-        const page = await res.json();
-        this.history = page.data.map(function(t) {
+        const page_res = await res.json();
+        this.history = page_res.data.map(function(t) {
             return {
                 id: t.id,
                 name: t.customer_name,
@@ -33,11 +51,37 @@
                 status: t.status === 'completed' ? 'Completed' : 'Canceled'
             };
         });
+        this.currentPage = page_res.current_page;
+        this.lastPage = page_res.last_page;
+        this.total = page_res.total;
+        this.perPage = page_res.per_page;
+        this.from = page_res.from || 0;
+        this.to = page_res.to || 0;
+    },
+
+    goToPage(page) {
+        if (page < 1 || page > this.lastPage || page === this.currentPage) return;
+        this.loadHistory(page);
+    },
+
+    get pageNumbers() {
+        const pages = [];
+        const start = Math.max(1, this.currentPage - 2);
+        const end = Math.min(this.lastPage, start + 4);
+        for (let i = start; i <= end; i++) pages.push(i);
+        return pages;
+    },
+
+    async onDateRangeChange(fromStr, toStr) {
+        this.fromDate = new Date(fromStr);
+        this.toDate = new Date(toStr);
+        await this.loadHistory(1);
     },
 
     clearSearch() {
-        this.searchDate = '';
-        this.loadHistory();
+        this.fromDate = null;
+        this.toDate = null;
+        this.loadHistory(1);
     },
 
     getStatusClass(status) {
@@ -63,7 +107,8 @@
     resendReceipt(entry) {
         this.showToast('Receipt resent to ' + entry.name + '.', 'success');
     }
-}">
+}"
+@date-range-changed.window="onDateRangeChange($event.detail.from, $event.detail.to)">
 
     <!-- Popup alert -->
     <div x-show="toast.show" x-cloak class="fixed inset-0 z-999 flex items-center justify-center bg-black/40 px-4" style="display: none;">
@@ -94,14 +139,42 @@
                 <h3 class="text-base font-semibold text-gray-800 dark:text-white/90 sm:text-lg">Queue History</h3>
                 <p class="mt-0.5 text-theme-xs text-gray-500 dark:text-gray-400 sm:text-theme-sm">Recent customers served today.</p>
             </div>
+
             <div class="flex items-center gap-2">
-                <input
-                    type="date"
-                    x-model="searchDate"
-                    @change="loadHistory()"
-                    class="h-10 rounded-lg border border-gray-300 bg-transparent px-3 text-theme-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90" />
+                <div x-data="{
+                    init() {
+                        flatpickr(this.$refs.datepicker, {
+                            mode: 'range',
+                            static: true,
+                            monthSelectorType: 'static',
+                            dateFormat: 'M j',
+                            prevArrow: '<svg class=\'stroke-current\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\' fill=\'none\' xmlns=\'http://www.w3.org/2000/svg\'><path d=\'M15.25 6L9 12.25L15.25 18.5\' stroke=\'\' stroke-width=\'1.5\' stroke-linecap=\'round\' stroke-linejoin=\'round\'/></svg>',
+                            nextArrow: '<svg class=\'stroke-current\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\' fill=\'none\' xmlns=\'http://www.w3.org/2000/svg\'><path d=\'M8.75 19L15 12.75L8.75 6.5\' stroke=\'\' stroke-width=\'1.5\' stroke-linecap=\'round\' stroke-linejoin=\'round\'/></svg>',
+                            onReady: (selectedDates, dateStr, instance) => {
+                                const customClass = instance.element.getAttribute('data-class');
+                                if (instance.calendarContainer) {
+                                    instance.calendarContainer.classList.add(customClass);
+                                }
+                            },
+                            onChange: (selectedDates, dateStr, instance) => {
+                                instance.element.value = dateStr.replace('to', '-');
+                                if (selectedDates.length === 2) {
+                                    this.$dispatch('date-range-changed', { from: selectedDates[0], to: selectedDates[1] });
+                                }
+                            },
+                        })
+                    }
+                }" class="relative max-w-40">
+                    <input x-ref="datepicker" class="h-10 w-full max-w-11 rounded-lg border border-gray-200 bg-white py-2.5 pl-[34px] pr-4 text-theme-sm font-medium text-gray-700 shadow-theme-xs focus:outline-hidden focus:ring-0 focus-visible:outline-hidden dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 xl:max-w-fit xl:pl-11" placeholder="Select dates" data-class="flatpickr-right" readonly="readonly" />
+                    <div class="absolute inset-0 right-auto flex items-center pointer-events-none left-4">
+                        <svg class="fill-gray-700 dark:fill-gray-400" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path fill-rule="evenodd" clip-rule="evenodd" d="M6.66683 1.54199C7.08104 1.54199 7.41683 1.87778 7.41683 2.29199V3.00033H12.5835V2.29199C12.5835 1.87778 12.9193 1.54199 13.3335 1.54199C13.7477 1.54199 14.0835 1.87778 14.0835 2.29199V3.00033L15.4168 3.00033C16.5214 3.00033 17.4168 3.89576 17.4168 5.00033V7.50033V15.8337C17.4168 16.9382 16.5214 17.8337 15.4168 17.8337H4.5835C3.47893 17.8337 2.5835 16.9382 2.5835 15.8337V7.50033V5.00033C2.5835 3.89576 3.47893 3.00033 4.5835 3.00033L5.91683 3.00033V2.29199C5.91683 1.87778 6.25262 1.54199 6.66683 1.54199ZM6.66683 4.50033H4.5835C4.30735 4.50033 4.0835 4.72418 4.0835 5.00033V6.75033H15.9168V5.00033C15.9168 4.72418 15.693 4.50033 15.4168 4.50033H13.3335H6.66683ZM15.9168 8.25033H4.0835V15.8337C4.0835 16.1098 4.30735 16.3337 4.5835 16.3337H15.4168C15.693 16.3337 15.9168 16.1098 15.9168 15.8337V8.25033Z" fill="" />
+                        </svg>
+                    </div>
+                </div>
+
                 <button
-                    x-show="searchDate"
+                    x-show="fromDate && toDate"
                     @click="clearSearch()"
                     type="button"
                     title="Clear date filter"
@@ -164,8 +237,61 @@
                             </td>
                         </tr>
                     </template>
+
+                    <!-- Empty state, held to the height of ~5 data rows -->
+                    <tr x-show="history.length === 0">
+                        <td colspan="10" class="px-5 py-4">
+                            <div class="flex h-[300px] flex-col items-center justify-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" class="text-gray-300 dark:text-gray-600">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" stroke="currentColor" stroke-width="1.5"/>
+                                    <path d="M3 9h18" stroke="currentColor" stroke-width="1.5"/>
+                                    <path d="M8 2v4M16 2v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                </svg>
+                                <p class="text-theme-sm font-medium text-gray-500 dark:text-gray-400">No data for that date</p>
+                                <p class="text-theme-xs text-gray-400 dark:text-gray-500">Try selecting a different date range.</p>
+                            </div>
+                        </td>
+                    </tr>
                 </tbody>
             </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="flex flex-col items-center justify-between gap-3 border-t border-gray-100 px-5 py-4 dark:border-gray-800 sm:flex-row sm:px-6">
+            <p class="text-theme-xs text-gray-500 dark:text-gray-400" x-show="total > 0">
+                Showing <span x-text="from"></span> to <span x-text="to"></span> of <span x-text="total"></span> results
+            </p>
+            <p class="text-theme-xs text-gray-500 dark:text-gray-400" x-show="total === 0">No results</p>
+
+            <div class="flex items-center gap-1" x-show="lastPage > 1">
+                <button
+                    @click="goToPage(currentPage - 1)"
+                    :disabled="currentPage === 1"
+                    type="button"
+                    class="inline-flex h-8 items-center justify-center rounded-lg border border-gray-300 px-3 text-theme-xs font-medium text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.05]">
+                    Prev
+                </button>
+
+                <template x-for="p in pageNumbers" :key="p">
+                    <button
+                        @click="goToPage(p)"
+                        type="button"
+                        class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-theme-xs font-medium transition"
+                        :class="p === currentPage
+                            ? 'bg-brand-500 text-white'
+                            : 'text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-white/[0.05]'"
+                        x-text="p">
+                    </button>
+                </template>
+
+                <button
+                    @click="goToPage(currentPage + 1)"
+                    :disabled="currentPage === lastPage"
+                    type="button"
+                    class="inline-flex h-8 items-center justify-center rounded-lg border border-gray-300 px-3 text-theme-xs font-medium text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.05]">
+                    Next
+                </button>
+            </div>
         </div>
     </div>
 </div>
