@@ -62,4 +62,6 @@ class QueueTicket extends Model
     {
         return '#' . $this->queue_number;
     }
+
+    protected $appends = ['waiting_time', 'formatted_queue_number'];
 }

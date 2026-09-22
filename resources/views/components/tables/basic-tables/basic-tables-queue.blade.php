@@ -30,6 +30,7 @@
                     role: (t.service && t.service.name) || ''
                 },
                 queueNumber: '#' + t.queue_number,
+                server: (t.barber && t.barber.name) || '—',
                 status: t.status
             };
         });
@@ -128,6 +129,7 @@
                         <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">ID</p></th>
                         <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Customer</p></th>
                         <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Queue Number</p></th>
+                        <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Server</p></th>
                         <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Status</p></th>
                         <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Actions</p></th>
                     </tr>
@@ -146,6 +148,7 @@
                                 </div>
                             </td>
                             <td class="px-5 py-4 sm:px-6"><p class="text-gray-500 text-theme-sm dark:text-gray-400" x-text="order.queueNumber"></p></td>
+                            <td class="px-5 py-4 sm:px-6"><p class="text-gray-500 text-theme-sm dark:text-gray-400" x-text="order.server"></p></td>
                             <td class="px-5 py-4 sm:px-6"><p class="text-theme-xs inline-block rounded-full px-2 py-0.5 font-medium" :class="getStatusClass(order.status)" x-text="statusLabel(order.status)"></p></td>
                             <td class="px-5 py-4 sm:px-6">
                                 <div class="flex items-center gap-2">
@@ -158,19 +161,29 @@
                                         SMS
                                     </button>
                                     <template x-if="order.status === 'in_queue'">
-                                        <button @click="startServing(order)" type="button"
-                                            class="inline-flex items-center gap-1.5 rounded-lg bg-yellow-500 px-3 py-2 text-theme-xs font-medium text-white shadow-theme-xs transition hover:bg-yellow-600">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none">
-                                                <path d="M6 4l14 8-14 8V4z" fill="currentColor"/>
-                                            </svg>
-                                            Serving
-                                        </button>
-                                    </template>
-                                    <button @click="completeOrder(order)" type="button" :disabled="order.status === 'completed' || order.status === 'canceled'"
-                                        class="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-2 text-theme-xs font-medium text-white shadow-theme-xs transition hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400 dark:disabled:bg-gray-700 dark:disabled:text-gray-500">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                                        Complete
-                                    </button>
+    <button @click="startServing(order)" type="button"
+        class="inline-flex items-center gap-1.5 rounded-lg bg-yellow-500 px-3 py-2 text-theme-xs font-medium text-white shadow-theme-xs transition hover:bg-yellow-600">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <path d="M6 4l14 8-14 8V4z" fill="currentColor"/>
+        </svg>
+        Serving
+    </button>
+</template>
+
+<template x-if="order.status === 'serving'">
+    <button @click="completeOrder(order)" type="button"
+        class="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-2 text-theme-xs font-medium text-white shadow-theme-xs transition hover:bg-green-700">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <path d="M5 13l4 4L19 7"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"/>
+        </svg>
+        Complete
+    </button>
+</template>
+
                                     <button @click="cancelOrder(order)" type="button" :disabled="order.status === 'completed' || order.status === 'canceled'"
                                         class="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-2 text-theme-xs font-medium text-white shadow-theme-xs transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400 dark:disabled:bg-gray-700 dark:disabled:text-gray-500">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
