@@ -161,28 +161,28 @@
                                         SMS
                                     </button>
                                     <template x-if="order.status === 'in_queue'">
-    <button @click="startServing(order)" type="button"
-        class="inline-flex items-center gap-1.5 rounded-lg bg-yellow-500 px-3 py-2 text-theme-xs font-medium text-white shadow-theme-xs transition hover:bg-yellow-600">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none">
-            <path d="M6 4l14 8-14 8V4z" fill="currentColor"/>
-        </svg>
-        Serving
-    </button>
-</template>
+                                        <button @click="startServing(order)" type="button"
+                                            class="inline-flex items-center gap-1.5 rounded-lg bg-yellow-500 px-3 py-2 text-theme-xs font-medium text-white shadow-theme-xs transition hover:bg-yellow-600">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                                <path d="M6 4l14 8-14 8V4z" fill="currentColor"/>
+                                            </svg>
+                                            Serving
+                                        </button>
+                                    </template>
 
-<template x-if="order.status === 'serving'">
-    <button @click="completeOrder(order)" type="button"
-        class="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-2 text-theme-xs font-medium text-white shadow-theme-xs transition hover:bg-green-700">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none">
-            <path d="M5 13l4 4L19 7"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"/>
-        </svg>
-        Complete
-    </button>
-</template>
+                                    <template x-if="order.status === 'serving'">
+                                        <button @click="completeOrder(order)" type="button"
+                                            class="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-2 text-theme-xs font-medium text-white shadow-theme-xs transition hover:bg-green-700">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                                <path d="M5 13l4 4L19 7"
+                                                      stroke="currentColor"
+                                                      stroke-width="2"
+                                                      stroke-linecap="round"
+                                                      stroke-linejoin="round"/>
+                                            </svg>
+                                            Complete
+                                        </button>
+                                    </template>
 
                                     <button @click="cancelOrder(order)" type="button" :disabled="order.status === 'completed' || order.status === 'canceled'"
                                         class="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-2 text-theme-xs font-medium text-white shadow-theme-xs transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400 dark:disabled:bg-gray-700 dark:disabled:text-gray-500">
@@ -193,6 +193,20 @@
                             </td>
                         </tr>
                     </template>
+
+                    <!-- Empty state -->
+                    <tr x-show="orders.length === 0">
+                        <td colspan="6" class="px-5 py-4">
+                            <div class="flex h-[300px] flex-col items-center justify-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" class="text-gray-300 dark:text-gray-600">
+                                    <path d="M12 8v4M12 16h.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                                <p class="text-theme-sm font-medium text-gray-500 dark:text-gray-400">No one in the queue right now</p>
+                                <p class="text-theme-xs text-gray-400 dark:text-gray-500">New customers will appear here as they join.</p>
+                            </div>
+                        </td>
+                    </tr>
                 </tbody>
             </table>
         </div>

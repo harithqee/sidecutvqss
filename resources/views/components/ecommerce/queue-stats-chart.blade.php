@@ -69,7 +69,8 @@
             this.chart.updateSeries([{ data: this.seriesData[this.selected] }]);
         }
     }"
-    x-init="initChart()">
+    x-init="initChart()"
+    @date-range-changed.window="onDateRangeChange($event.detail.from, $event.detail.to)">
     <div class="flex flex-col gap-5 mb-6 sm:flex-row sm:justify-between">
         <div class="w-full">
             <h3 class="text-lg font-semibold text-gray-800 dark:text-white/90">Queue Statistics</h3>

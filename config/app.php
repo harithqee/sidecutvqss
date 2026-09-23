@@ -121,6 +121,7 @@ return [
     'maintenance' => [
         'driver' => env('APP_MAINTENANCE_DRIVER', 'file'),
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
+        'timezone' => env('APP_TIMEZONE', 'Asia/Kuala_Lumpur'),
     ],
 
 ];

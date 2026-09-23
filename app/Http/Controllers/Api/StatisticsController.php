@@ -75,44 +75,46 @@ class StatisticsController extends Controller
      * Accepts optional ?from=YYYY-MM-DD&to=YYYY-MM-DD query params.
      */
     public function hourly(Request $request): JsonResponse
-    {
-        $from = $request->query('from', now()->subDays(6)->toDateString());
-        $to = $request->query('to', now()->toDateString());
-        $hours = range(9, 20);
+{
+    $from = $request->query('from', now()->subDays(6)->toDateString());
+    $to = $request->query('to', now()->toDateString());
+    $hours = range(11, 22);
 
-        $counts = QueueTicket::join('queue_sessions', 'queue_tickets.queue_session_id', '=', 'queue_sessions.id')
-            ->whereBetween('queue_sessions.session_date', [$from, $to])
-            ->whereRaw('HOUR(queue_tickets.joined_at) between 9 and 20')
-            ->selectRaw('HOUR(queue_tickets.joined_at) as hour, count(*) as total')
-            ->groupBy('hour')
-            ->pluck('total', 'hour');
+    $baseQuery = QueueTicket::whereIn('status', ['completed', 'canceled'])
+        ->whereHas('session', function ($s) use ($from, $to) {
+            $s->whereBetween('session_date', [$from, $to]);
+        });
 
-        $waits = QueueTicket::join('queue_sessions', 'queue_tickets.queue_session_id', '=', 'queue_sessions.id')
-            ->whereBetween('queue_sessions.session_date', [$from, $to])
-            ->whereNotNull('queue_tickets.served_at')
-            ->whereRaw('HOUR(queue_tickets.joined_at) between 9 and 20')
-            ->selectRaw('HOUR(queue_tickets.joined_at) as hour, AVG(TIMESTAMPDIFF(MINUTE, queue_tickets.joined_at, queue_tickets.served_at)) as avg_wait')
-            ->groupBy('hour')
-            ->pluck('avg_wait', 'hour');
+    $counts = (clone $baseQuery)
+        ->whereRaw('HOUR(joined_at) between 11 and 22')
+        ->selectRaw('HOUR(joined_at) as hour, count(*) as total')
+        ->groupBy('hour')
+        ->pluck('total', 'hour');
 
-        $categories = [];
-        $overview = [];
-        $waitTimes = [];
+    $waits = (clone $baseQuery)
+        ->whereNotNull('served_at')
+        ->whereRaw('HOUR(joined_at) between 11 and 22')
+        ->selectRaw('HOUR(joined_at) as hour, AVG(TIMESTAMPDIFF(MINUTE, joined_at, served_at)) as avg_wait')
+        ->groupBy('hour')
+        ->pluck('avg_wait', 'hour');
 
-        foreach ($hours as $h) {
-            $categories[] = Carbon::createFromTime($h)->format('gA');
-            $overview[] = (int) ($counts[$h] ?? 0);
-            $waitTimes[] = round((float) ($waits[$h] ?? 0), 1);
-        }
+    $categories = [];
+    $overview = [];
+    $waitTimes = [];
 
-        return response()->json([
-            'categories' => $categories,
-            'overview' => $overview,
-            'peakHours' => $overview,
-            'waitTimes' => $waitTimes,
-        ]);
+    foreach ($hours as $h) {
+        $categories[] = \Carbon\Carbon::createFromTime($h)->format('gA');
+        $overview[] = (int) ($counts[$h] ?? 0);
+        $waitTimes[] = round((float) ($waits[$h] ?? 0), 1);
     }
 
+    return response()->json([
+        'categories' => $categories,
+        'overview' => $overview,
+        'peakHours' => $overview,
+        'waitTimes' => $waitTimes,
+    ]);
+}
     /**
      * Monthly report: completed ticket count per month for the current year.
      */
@@ -132,22 +134,25 @@ class StatisticsController extends Controller
     /**
      * Barber performance: completed ticket count per barber, today only.
      */
-    public function barberPerformance(): JsonResponse
-    {
-        $data = Barber::withCount(['queueTickets' => function ($q) {
-                $q->where('status', 'completed')
-                  ->whereHas('session', function ($s) {
-                      $s->whereDate('session_date', today());
-                  });
-            }])
-            ->get(['id', 'name'])
-            ->map(function ($barber) {
-                return [
-                    'name' => $barber->name,
-                    'completed' => $barber->queue_tickets_count,
-                ];
-            });
+    public function barberPerformance(Request $request): JsonResponse
+{
+    $from = $request->query('from', today()->toDateString());
+    $to = $request->query('to', today()->toDateString());
 
-        return response()->json($data);
-    }
+    $data = Barber::withCount(['queueTickets' => function ($q) use ($from, $to) {
+            $q->where('status', 'completed')
+              ->whereHas('session', function ($s) use ($from, $to) {
+                  $s->whereBetween('session_date', [$from, $to]);
+              });
+        }])
+        ->get(['id', 'name'])
+        ->map(function ($barber) {
+            return [
+                'name' => $barber->name,
+                'completed' => $barber->queue_tickets_count,
+            ];
+        });
+
+    return response()->json($data);
+}
 }

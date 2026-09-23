@@ -51,12 +51,12 @@ class QueueTicket extends Model
 
     // Matches the frontend's "30 min" waiting time display
     public function getWaitingTimeAttribute(): ?string
-    {
-        if (!$this->joined_at || !$this->served_at) {
-            return null;
-        }
-        return $this->joined_at->diffInMinutes($this->served_at) . ' min';
+{
+    if (!$this->joined_at || !$this->served_at) {
+        return null;
     }
+    return round($this->joined_at->diffInMinutes($this->served_at)) . ' min';
+}
 
     public function getFormattedQueueNumberAttribute(): string
     {
