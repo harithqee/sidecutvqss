@@ -9,7 +9,8 @@ use App\Http\Requests\UpdateMessageTemplateRequest;
 use Illuminate\Http\JsonResponse;
 
 class MessageTemplateController extends Controller
-{ public function index(): JsonResponse
+{
+    public function index(): JsonResponse
     {
         return response()->json(MessageTemplate::orderBy('name')->get());
     }

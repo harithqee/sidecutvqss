@@ -34,5 +34,10 @@ return [
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
     ],
+    
+    'textbee' => [
+    'endpoint' => env('TEXTBEE_ENDPOINT', 'https://api.textbee.dev/api/v1/gateway/send-sms'),
+    'api_key' => env('TEXTBEE_API_KEY'),
+],
 
 ];
