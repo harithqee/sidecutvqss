@@ -69,15 +69,11 @@ class QueueTicketController extends Controller
 
         $estimatedWait = $this->estimateWait($session);
 
-        try {
-    $this->textBee->sendById(1, $ticket->customer_phone, [
-        'customerName' => $ticket->customer_name,
-        'queueNumber' => $ticket->queue_number,
-        'waitTime' => $estimatedWait,
-    ]);
-} catch (\Throwable $e) {
-    \Log::warning('TextBee send failed on queue join: ' . $e->getMessage());
-}
+        $this->sendAndLogSms($ticket, 1, [
+            'customerName' => $ticket->customer_name,
+            'queueNumber' => $ticket->queue_number,
+            'waitTime' => $estimatedWait,
+        ]);
 
         return response()->json([
             'ticket' => $ticket,
@@ -87,10 +83,12 @@ class QueueTicketController extends Controller
 
     /**
      * Update a ticket's status: in_queue -> serving -> completed/canceled.
+     * Fires the "Service Complete" SMS template (ID 3) when moving to completed.
      */
     public function updateStatus(UpdateQueueTicketStatusRequest $request, QueueTicket $ticket): JsonResponse
     {
         $data = ['status' => $request->status];
+        $wasNotCompleted = $ticket->status !== 'completed';
 
         if ($request->status === 'serving' && !$ticket->served_at) {
             $data['served_at'] = now();
@@ -101,6 +99,12 @@ class QueueTicketController extends Controller
         }
 
         $ticket->update($data);
+
+        if ($request->status === 'completed' && $wasNotCompleted) {
+            $this->sendAndLogSms($ticket, 3, [
+                'customerName' => $ticket->customer_name,
+            ]);
+        }
 
         return response()->json($ticket->fresh());
     }
@@ -116,23 +120,16 @@ class QueueTicketController extends Controller
             ->where('queue_number', '<=', $ticket->queue_number)
             ->count();
 
-        try {
-    $result = $this->textBee->sendById(2, $ticket->customer_phone, [
-        'customerName' => $ticket->customer_name,
-        'position' => $position,
-    ]);
-} catch (\Throwable $e) {
-    return response()->json(['message' => 'Could not send SMS: ' . $e->getMessage()], 502);
-}
-
-        $log = $ticket->smsLogs()->create([
-            'phone' => $ticket->customer_phone,
-            'message_body' => $result['message'],
-            'status' => 'sent',
-            'sent_at' => now(),
+        $result = $this->sendAndLogSms($ticket, 2, [
+            'customerName' => $ticket->customer_name,
+            'position' => $position,
         ]);
 
-        return response()->json($log, 201);
+        if (!$result) {
+            return response()->json(['message' => 'Could not send SMS.'], 502);
+        }
+
+        return response()->json(['message' => 'sent', 'text' => $result['message']], 201);
     }
 
     /**
@@ -168,6 +165,38 @@ class QueueTicketController extends Controller
             'position' => $position,
             'estimated_wait_minutes' => $position ? max(0, ($position - 1) * 15) : null,
         ]);
+    }
+
+    /**
+     * Sends an SMS via a template and logs the attempt (success or failure)
+     * to sms_logs, so every automated and manual send is auditable.
+     */
+    private function sendAndLogSms(QueueTicket $ticket, int $templateId, array $variables): ?array
+    {
+        try {
+            $result = $this->textBee->sendById($templateId, $ticket->customer_phone, $variables);
+
+            $ticket->smsLogs()->create([
+                'message_template_id' => $templateId,
+                'phone' => $ticket->customer_phone,
+                'message_body' => $result['message'],
+                'status' => 'sent',
+                'sent_at' => now(),
+            ]);
+
+            return $result;
+        } catch (\Throwable $e) {
+            $ticket->smsLogs()->create([
+                'message_template_id' => $templateId,
+                'phone' => $ticket->customer_phone,
+                'message_body' => '',
+                'status' => 'failed',
+                'sent_at' => null,
+            ]);
+
+            \Log::warning("TextBee send failed (template {$templateId}): " . $e->getMessage());
+            return null;
+        }
     }
 
     /**

@@ -7,8 +7,8 @@
             const d = await res.json();
             this.stats = [
                 { label: 'Customers Today', value: String(d.customers_today), change: this.fmtChange(d.customers_change_pct), trend: d.customers_change_pct >= 0 ? 'up' : 'down' },
-                { label: 'Avg Wait Time', value: d.avg_wait_minutes + ' min', change: this.fmtChange(d.avg_wait_change_pct), trend: d.avg_wait_change_pct >= 0 ? 'up' : 'down' },
-                { label: 'Avg Service Time', value: d.avg_service_minutes + ' min', change: this.fmtChange(d.avg_service_change_pct), trend: d.avg_service_change_pct >= 0 ? 'up' : 'down' },
+                { label: 'Avg Wait Time', value: d.avg_wait_minutes + ' min', change: this.fmtChange(d.avg_wait_change_pct), trend: d.avg_wait_change_pct <= 0 ? 'up' : 'down' },
+                { label: 'Avg Service Time', value: d.avg_service_minutes + ' min', change: this.fmtChange(d.avg_service_change_pct), trend: d.avg_service_change_pct <= 0 ? 'up' : 'down' },
                 { label: 'Completion Rate', value: d.completion_rate + '%', change: this.fmtChange(d.completion_rate_change_pct), trend: d.completion_rate_change_pct >= 0 ? 'up' : 'down' },
             ];
         },

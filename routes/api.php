@@ -4,6 +4,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\{BarberController, QueueTicketController, MessageTemplateController};
 use App\Http\Controllers\Api\StatisticsController;
+use App\Http\Controllers\Api\SmsLogController;
+
 
 
 
@@ -38,5 +40,9 @@ Route::prefix('stats')->group(function () {
     Route::get('/hourly', [StatisticsController::class, 'hourly']);
     Route::get('/monthly-report', [StatisticsController::class, 'monthlyReport']);
     Route::get('/barber-performance', [StatisticsController::class, 'barberPerformance']);
+
 });
+
+    Route::get('/sms-logs', [SmsLogController::class, 'index']);
+
 

@@ -24,6 +24,18 @@ Route::get('/statistics', function () {
     return view('pages.statistics', ['title' => 'Statistics']);
 })->name('statistics');
 
+
+Route::get('/customers', function () {
+    return view('pages.customers', ['title' => 'Customers Landing Page']);
+})->name('customers');
+
+
+
+
+
+
+
+
 // blank page
 Route::get('/blank', function () {
     return view('pages.blank', ['title' => 'Blank']);
@@ -103,13 +115,6 @@ Route::get('/image', function () {
 Route::get('/videos', function () {
     return view('pages.ui-elements.videos', ['title' => 'Videos']);
 })->name('videos');
-
-
-Route::get('/customers', function () {
-    return view('pages.customers', ['title' => 'Customers Landing Page']);
-})->name('customers');
-
-
 
 
 

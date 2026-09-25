@@ -52,24 +52,28 @@
     },
 
     async updateStatus(order, status) {
-        const res = await fetch('/api/queue/' + order.id + '/status', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-            body: JSON.stringify({ status: status })
+    const res = await fetch('/api/queue/' + order.id + '/status', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ status: status })
+    });
+    if (!res.ok) {
+        this.showToast('Could not update status.', 'error');
+        return;
+    }
+    if (status === 'serving') {
+        order.status = 'serving';
+        this.showToast('Customer is now being served.', 'success');
+    } else {
+        this.orders = this.orders.filter(function(o) {
+            return o.id !== order.id;
         });
-        if (!res.ok) {
-            this.showToast('Could not update status.', 'error');
-            return;
-        }
-        if (status === 'serving') {
-            order.status = 'serving';
-            this.showToast('Customer is now being served.', 'success');
+        if (status === 'completed') {
+            this.showToast('Ticket completed and SMS receipt sent.', 'success');
         } else {
-            this.orders = this.orders.filter(function(o) {
-                return o.id !== order.id;
-            });
-            this.showToast(status === 'completed' ? 'Ticket marked as completed.' : 'Ticket canceled.', 'success');
+            this.showToast('Ticket canceled.', 'success');
         }
+    }
     },
 
     startServing(order) {
