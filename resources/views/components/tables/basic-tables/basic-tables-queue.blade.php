@@ -1,137 +1,162 @@
 <div x-data="{
-    orders: [
-        {
-            id: 1,
-            user: {
-                image: './images/user/user-17.jpg',
-                name: 'Lindsey Curtis',
-                role: 'Web Designer',
-            },
-            queueNumber: '#1',
-            status: 'Serving',
-        },
-        {
-            id: 2,
-            user: {
-                image: './images/user/user-18.jpg',
-                name: 'Kaiya George',
-                role: 'Project Manager',
-            },
-            queueNumber: '#2',
-            status: 'In Queue',
-        },
-        {
-            id: 3,
-            user: {
-                image: './images/user/user-19.jpg',
-                name: 'Zain Geidt',
-                role: 'Content Writer',
-            },
-            queueNumber: '#3',
-            status: 'In Queue',
-        },
-        {
-            id: 4,
-            user: {
-                image: './images/user/user-20.jpg',
-                name: 'Abram Schleifer',
-                role: 'Digital Marketer',
-            },
-            queueNumber: '#4',
-            status: 'Canceled',
-        },
-        {
-            id: 5,
-            user: {
-                image: './images/user/user-21.jpg',
-                name: 'Carla George',
-                role: 'Front-end Developer',
-            },
-            queueNumber: '#5',
-            status: 'Completed',
-        },
-    ],
+    orders: [],
+    toast: { show: false, message: '', type: 'success' },
+
+    showToast(message, type) {
+        this.toast.message = message;
+        this.toast.type = type || 'success';
+        this.toast.show = true;
+    },
+
+    randomUserImage() {
+        const num = Math.floor(Math.random() * 30) + 1;
+        return './images/user/user-' + String(num).padStart(2, '0') + '.jpg';
+    },
+
+    async init() {
+        await this.loadOrders();
+    },
+
+    async loadOrders() {
+        const res = await fetch('/api/queue');
+        const tickets = await res.json();
+        const self = this;
+        this.orders = tickets.map(function(t) {
+            return {
+                id: t.id,
+                user: {
+                    image: self.randomUserImage(),
+                    name: t.customer_name,
+                    role: (t.service && t.service.name) || ''
+                },
+                queueNumber: '#' + t.queue_number,
+                server: (t.barber && t.barber.name) || '—',
+                status: t.status
+            };
+        });
+    },
+
+    statusLabel(status) {
+        const labels = { serving: 'Serving', in_queue: 'In Queue', canceled: 'Canceled', completed: 'Completed' };
+        return labels[status] || status;
+    },
+
     getStatusClass(status) {
         const classes = {
-            'Serving': 'bg-yellow-50 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-400',
-            'In Queue': 'bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400',
-            'Canceled': 'bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-500',
-            'Completed': 'bg-green-50 text-green-700 dark:bg-green-500/15 dark:text-green-500',
+            serving: 'bg-yellow-50 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-400',
+            in_queue: 'bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400',
+            canceled: 'bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-500',
+            completed: 'bg-green-50 text-green-700 dark:bg-green-500/15 dark:text-green-500'
         };
         return classes[status] || '';
     },
+
+    async updateStatus(order, status) {
+    const res = await fetch('/api/queue/' + order.id + '/status', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ status: status })
+    });
+    if (!res.ok) {
+        this.showToast('Could not update status.', 'error');
+        return;
+    }
+    if (status === 'serving') {
+        order.status = 'serving';
+        this.showToast('Customer is now being served.', 'success');
+    } else {
+        this.orders = this.orders.filter(function(o) {
+            return o.id !== order.id;
+        });
+        if (status === 'completed') {
+            this.showToast('Ticket completed and SMS receipt sent.', 'success');
+        } else {
+            this.showToast('Ticket canceled.', 'success');
+        }
+    }
+    },
+
+    startServing(order) {
+        this.updateStatus(order, 'serving');
+    },
+
     completeOrder(order) {
-        order.status = 'Completed';
+        this.updateStatus(order, 'completed');
     },
+
     cancelOrder(order) {
-        order.status = 'Canceled';
+        this.updateStatus(order, 'canceled');
     },
-    sendSms(order) {
-        // Hook this up to your SMS controller/route
-        console.log('Sending SMS to', order.user.name, 'for queue', order.queueNumber);
+
+    async sendSms(order) {
+        const res = await fetch('/api/queue/' + order.id + '/sms', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({})
+        });
+        if (!res.ok) {
+            this.showToast('Could not send SMS.', 'error');
+            return;
+        }
+        this.showToast('SMS sent to ' + order.user.name + '.', 'success');
     }
 }">
+
+    <!-- Popup alert -->
+    <div x-show="toast.show" x-cloak class="fixed inset-0 z-999 flex items-center justify-center bg-black/40 px-4" style="display: none;">
+        <div x-show="toast.show"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0 scale-95"
+             x-transition:enter-end="opacity-100 scale-100"
+             @click.away="toast.show = false"
+             class="w-full max-w-sm rounded-xl bg-white p-6 text-center shadow-theme-lg dark:bg-gray-900">
+            <div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full"
+                 :class="toast.type === 'success' ? 'bg-green-50 dark:bg-green-500/15' : 'bg-red-50 dark:bg-red-500/15'">
+                <svg x-show="toast.type === 'success'" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green-600 dark:text-green-400"/>
+                </svg>
+                <svg x-show="toast.type === 'error'" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-red-600 dark:text-red-400"/>
+                </svg>
+            </div>
+            <h3 class="mb-1 text-base font-semibold text-gray-800 dark:text-white/90" x-text="toast.type === 'success' ? 'Success' : 'Failed'"></h3>
+            <p class="mb-5 text-theme-sm text-gray-500 dark:text-gray-400" x-text="toast.message"></p>
+            <button @click="toast.show = false" type="button" class="w-full rounded-lg bg-brand-500 px-4 py-2.5 text-theme-sm font-medium text-white transition hover:bg-brand-600">OK</button>
+        </div>
+    </div>
+
     <div class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
         <div class="max-w-full overflow-x-auto custom-scrollbar">
-            <table class="w-full min-w-[1102px]">
+            <table class="w-full min-w-[1250px]">
                 <thead>
                     <tr class="border-b border-gray-100 dark:border-gray-800">
-                        <th class="px-5 py-3 text-left sm:px-6">
-                            <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
-                                Customer
-                            </p>
-                        </th>
-                        <th class="px-5 py-3 text-left sm:px-6">
-                            <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
-                                Queue Number
-                            </p>
-                        </th>
-                        <th class="px-5 py-3 text-left sm:px-6">
-                            <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
-                                Status
-                            </p>
-                        </th>
-                        <th class="px-5 py-3 text-left sm:px-6">
-                            <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
-                                Actions
-                            </p>
-                        </th>
+                        <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">ID</p></th>
+                        <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Customer</p></th>
+                        <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Queue Number</p></th>
+                        <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Server</p></th>
+                        <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Status</p></th>
+                        <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Actions</p></th>
                     </tr>
                 </thead>
                 <tbody>
                     <template x-for="order in orders" :key="order.id">
                         <tr class="border-b border-gray-100 dark:border-gray-800">
-                            <!-- Customer -->
+                            <td class="px-5 py-4 sm:px-6"><span class="text-gray-500 text-theme-sm dark:text-gray-400" x-text="order.id"></span></td>
                             <td class="px-5 py-4 sm:px-6">
                                 <div class="flex items-center gap-3">
-                                    <div class="w-10 h-10 overflow-hidden rounded-full">
-                                        <img :src="order.user.image" :alt="order.user.name">
-                                    </div>
+                                    <div class="w-10 h-10 overflow-hidden rounded-full"><img :src="order.user.image" :alt="order.user.name"></div>
                                     <div>
                                         <span class="block font-medium text-gray-800 text-theme-sm dark:text-white/90" x-text="order.user.name"></span>
                                         <span class="block text-gray-500 text-theme-xs dark:text-gray-400" x-text="order.user.role"></span>
                                     </div>
                                 </div>
                             </td>
-
-                            <!-- Queue Number -->
-                            <td class="px-5 py-4 sm:px-6">
-                                <p class="text-gray-500 text-theme-sm dark:text-gray-400" x-text="order.queueNumber"></p>
-                            </td>
-
-                            <!-- Status -->
-                            <td class="px-5 py-4 sm:px-6">
-                                <p class="text-theme-xs inline-block rounded-full px-2 py-0.5 font-medium" :class="getStatusClass(order.status)" x-text="order.status"></p>
-                            </td>
-
-                            <!-- Actions -->
+                            <td class="px-5 py-4 sm:px-6"><p class="text-gray-500 text-theme-sm dark:text-gray-400" x-text="order.queueNumber"></p></td>
+                            <td class="px-5 py-4 sm:px-6"><p class="text-gray-500 text-theme-sm dark:text-gray-400" x-text="order.server"></p></td>
+                            <td class="px-5 py-4 sm:px-6"><p class="text-theme-xs inline-block rounded-full px-2 py-0.5 font-medium" :class="getStatusClass(order.status)" x-text="statusLabel(order.status)"></p></td>
                             <td class="px-5 py-4 sm:px-6">
                                 <div class="flex items-center gap-2">
-
-                                    <!-- Send SMS -->
-                                    <button
-                                        @click="sendSms(order)"
-                                        type="button"
+                                    <button @click="sendSms(order)" type="button"
                                         class="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-theme-xs font-medium text-gray-700 shadow-theme-xs transition hover:bg-gray-50 dark:border-gray-700 dark:bg-white/[0.03] dark:text-gray-300 dark:hover:bg-white/[0.05]">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24">
                                             <path d="M0 0h24v24H0z" fill="none" />
@@ -139,35 +164,53 @@
                                         </svg>
                                         SMS
                                     </button>
+                                    <template x-if="order.status === 'in_queue'">
+                                        <button @click="startServing(order)" type="button"
+                                            class="inline-flex items-center gap-1.5 rounded-lg bg-yellow-500 px-3 py-2 text-theme-xs font-medium text-white shadow-theme-xs transition hover:bg-yellow-600">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                                <path d="M6 4l14 8-14 8V4z" fill="currentColor"/>
+                                            </svg>
+                                            Serving
+                                        </button>
+                                    </template>
 
-                                    <!-- Complete -->
-                                    <button
-                                        @click="completeOrder(order)"
-                                        type="button"
-                                        :disabled="order.status === 'Completed' || order.status === 'Canceled'"
-                                        class="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-2 text-theme-xs font-medium text-white shadow-theme-xs transition hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400 dark:disabled:bg-gray-700 dark:disabled:text-gray-500">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none">
-                                            <path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                        </svg>
-                                        Complete
-                                    </button>
+                                    <template x-if="order.status === 'serving'">
+                                        <button @click="completeOrder(order)" type="button"
+                                            class="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-2 text-theme-xs font-medium text-white shadow-theme-xs transition hover:bg-green-700">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                                <path d="M5 13l4 4L19 7"
+                                                      stroke="currentColor"
+                                                      stroke-width="2"
+                                                      stroke-linecap="round"
+                                                      stroke-linejoin="round"/>
+                                            </svg>
+                                            Complete
+                                        </button>
+                                    </template>
 
-                                    <!-- Cancel -->
-                                    <button
-                                        @click="cancelOrder(order)"
-                                        type="button"
-                                        :disabled="order.status === 'Completed' || order.status === 'Canceled'"
+                                    <button @click="cancelOrder(order)" type="button" :disabled="order.status === 'completed' || order.status === 'canceled'"
                                         class="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-2 text-theme-xs font-medium text-white shadow-theme-xs transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400 dark:disabled:bg-gray-700 dark:disabled:text-gray-500">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none">
-                                            <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                        </svg>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                                         Cancel
                                     </button>
-
                                 </div>
                             </td>
                         </tr>
                     </template>
+
+                    <!-- Empty state -->
+                    <tr x-show="orders.length === 0">
+                        <td colspan="6" class="px-5 py-4">
+                            <div class="flex h-[300px] flex-col items-center justify-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" class="text-gray-300 dark:text-gray-600">
+                                    <path d="M12 8v4M12 16h.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.5"/>
+                                </svg>
+                                <p class="text-theme-sm font-medium text-gray-500 dark:text-gray-400">No one in the queue right now</p>
+                                <p class="text-theme-xs text-gray-400 dark:text-gray-500">New customers will appear here as they join.</p>
+                            </div>
+                        </td>
+                    </tr>
                 </tbody>
             </table>
         </div>

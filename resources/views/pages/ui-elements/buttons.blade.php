@@ -74,5 +74,4 @@
         </x-common.component-card>
 
     </div>
-    
 @endsection

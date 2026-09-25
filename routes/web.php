@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\DashboardController;
 
+
 // dashboard pages
 Route::get('/', function () {
     return view('pages.dashboard.ecommerce', ['title' => 'Sidecut VQS']);
@@ -22,6 +23,18 @@ Route::get('/messages', function () {
 Route::get('/statistics', function () {
     return view('pages.statistics', ['title' => 'Statistics']);
 })->name('statistics');
+
+
+Route::get('/customers', function () {
+    return view('pages.customers', ['title' => 'Customers Landing Page']);
+})->name('customers');
+
+
+
+
+
+
+
 
 // blank page
 Route::get('/blank', function () {
@@ -102,13 +115,6 @@ Route::get('/image', function () {
 Route::get('/videos', function () {
     return view('pages.ui-elements.videos', ['title' => 'Videos']);
 })->name('videos');
-
-
-Route::get('/customers', function () {
-    return view('pages.customers', ['title' => 'Customers Landing Page']);
-})->name('customers');
-
-
 
 
 

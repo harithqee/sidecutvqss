@@ -8,4 +8,4 @@
                                 <x-profile.personal-info-card />
                                         <x-profile.address-card />
                                             </div>
-                                            @endsection
+    @endsection

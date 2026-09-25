@@ -1,11 +1,21 @@
 <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-6 xl:grid-cols-4"
      x-data="{
-        stats: [
-            { label: 'Customers Today', value: '48', change: '+12%', trend: 'up' },
-            { label: 'Avg Wait Time', value: '22 min', change: '-4%', trend: 'down' },
-            { label: 'Avg Service Time', value: '25 min', change: '+2%', trend: 'up' },
-            { label: 'Completion Rate', value: '92%', change: '+3%', trend: 'up' },
-        ]
+        stats: [],
+
+        async init() {
+            const res = await fetch('/api/stats/summary');
+            const d = await res.json();
+            this.stats = [
+                { label: 'Customers Today', value: String(d.customers_today), change: this.fmtChange(d.customers_change_pct), trend: d.customers_change_pct >= 0 ? 'up' : 'down' },
+                { label: 'Avg Wait Time', value: d.avg_wait_minutes + ' min', change: this.fmtChange(d.avg_wait_change_pct), trend: d.avg_wait_change_pct <= 0 ? 'up' : 'down' },
+                { label: 'Avg Service Time', value: d.avg_service_minutes + ' min', change: this.fmtChange(d.avg_service_change_pct), trend: d.avg_service_change_pct <= 0 ? 'up' : 'down' },
+                { label: 'Completion Rate', value: d.completion_rate + '%', change: this.fmtChange(d.completion_rate_change_pct), trend: d.completion_rate_change_pct >= 0 ? 'up' : 'down' },
+            ];
+        },
+
+        fmtChange(pct) {
+            return (pct >= 0 ? '+' : '') + pct + '%';
+        }
      }">
     <template x-for="stat in stats" :key="stat.label">
         <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">

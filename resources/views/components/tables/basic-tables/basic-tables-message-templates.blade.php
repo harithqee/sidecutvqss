@@ -1,220 +1,297 @@
 <div x-data="{
-    templates: [
-        {
-            id: 1,
-            name: 'Queue Confirmation',
-            trigger: 'Customer joins queue',
-            message: 'Hi {name}, you are #{queueNumber} in line at Sidecut. Estimated wait: {waitTime} min.',
-            isActive: true,
-            updatedAt: 'Sep 4, 2026',
-            editing: false,
-        },
-        {
-            id: 2,
-            name: 'Turn Reminder',
-            trigger: '2 customers before you',
-            message: 'Hi {name}, you are almost up! 2 people ahead of you at Sidecut. Please be ready.',
-            isActive: true,
-            updatedAt: 'Sep 3, 2026',
-            editing: false,
-        },
-        {
-            id: 3,
-            name: 'Now Serving',
-            trigger: 'Customer called to chair',
-            message: 'Hi {name}, it is your turn! Please head to {server} at Sidecut now.',
-            isActive: true,
-            updatedAt: 'Sep 3, 2026',
-            editing: false,
-        },
-        {
-            id: 4,
-            name: 'Service Complete',
-            trigger: 'Ticket marked completed',
-            message: 'Thanks for visiting Sidecut, {name}! We hope to see you again soon.',
-            isActive: false,
-            updatedAt: 'Aug 28, 2026',
-            editing: false,
-        },
-        {
-            id: 5,
-            name: 'Cancellation Notice',
-            trigger: 'Ticket canceled',
-            message: 'Hi {name}, your queue ticket #{queueNumber} has been canceled. Feel free to rejoin anytime.',
-            isActive: true,
-            updatedAt: 'Aug 30, 2026',
-            editing: false,
-        },
-        {
-            id: 6,
-            name: 'No Show Follow-up',
-            trigger: 'Ticket marked no-show',
-            message: 'Hi {name}, we missed you at your appointment! Feel free to rejoin the queue whenever you are ready.',
-            isActive: false,
-            updatedAt: 'Aug 25, 2026',
-            editing: false,
-        },
-        {
-            id: 7,
-            name: 'Feedback Request',
-            trigger: '30 min after service complete',
-            message: 'Hi {name}, thanks for visiting Sidecut! We would love to hear your feedback: {feedbackLink}',
-            isActive: true,
-            updatedAt: 'Aug 22, 2026',
-            editing: false,
-        },
-        {
-            id: 8,
-            name: 'Long Wait Apology',
-            trigger: 'Wait time exceeds 45 min',
-            message: 'Hi {name}, sorry for the longer wait today! You are still #{queueNumber} in line, thanks for your patience.',
-            isActive: false,
-            updatedAt: 'Aug 18, 2026',
-            editing: false,
-        },
-    ],
-    startEdit(template) {
-        template.editing = true;
+    templates: [],
+    newTemplateName: '',
+    newTemplateTrigger: '',
+    newTemplateMessage: '',
+    toast: { show: false, message: '', type: 'success' },
+    editingTemplate: null,
+
+    showToast(message, type) {
+        this.toast.message = message;
+        this.toast.type = type || 'success';
+        this.toast.show = true;
     },
-    saveEdit(template) {
-        template.editing = false;
-        template.updatedAt = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+    async init() {
+        await this.loadTemplates();
     },
-    cancelEdit(template) {
-        template.editing = false;
+
+    async loadTemplates() {
+        const res = await fetch('/api/message-templates');
+        const data = await res.json();
+        this.templates = data.map(function(t) {
+            return {
+                id: t.id,
+                name: t.name,
+                trigger: t.trigger_event,
+                message: t.message_body,
+                isActive: t.is_active,
+                updatedAt: new Date(t.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+            };
+        });
     },
-    toggleActive(template) {
-        template.isActive = !template.isActive;
-    },
-    deleteTemplate(template) {
-        if (confirm('Delete template ' + template.name + '? This cannot be undone.')) {
-            this.templates = this.templates.filter(function(t) {
-                return t.id !== template.id;
-            });
+
+    async addTemplate() {
+        if (!this.newTemplateName.trim() || !this.newTemplateTrigger.trim() || !this.newTemplateMessage.trim()) {
+            this.showToast('Please fill in name, trigger, and message.', 'error');
+            return;
         }
+        const res = await fetch('/api/message-templates', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({
+                name: this.newTemplateName,
+                trigger_event: this.newTemplateTrigger,
+                message_body: this.newTemplateMessage,
+                is_active: true
+            })
+        });
+        if (!res.ok) {
+            this.showToast('Could not add template.', 'error');
+            return;
+        }
+        const t = await res.json();
+        this.templates.push({
+            id: t.id,
+            name: t.name,
+            trigger: t.trigger_event,
+            message: t.message_body,
+            isActive: t.is_active,
+            updatedAt: new Date(t.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        });
+        this.newTemplateName = '';
+        this.newTemplateTrigger = '';
+        this.newTemplateMessage = '';
+        this.showToast('Template added successfully.', 'success');
+    },
+
+    startEdit(template) {
+        // work on a copy so Cancel doesn't leave changes behind
+        this.editingTemplate = {
+            id: template.id,
+            name: template.name,
+            trigger: template.trigger,
+            message: template.message,
+        };
+    },
+
+    async saveEdit() {
+        const template = this.editingTemplate;
+        const res = await fetch('/api/message-templates/' + template.id, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({
+                name: template.name,
+                trigger_event: template.trigger,
+                message_body: template.message
+            })
+        });
+        if (!res.ok) {
+            this.showToast('Could not save changes.', 'error');
+            return;
+        }
+        const updated = await res.json();
+        const original = this.templates.find(function(t) { return t.id === template.id; });
+        if (original) {
+            original.name = template.name;
+            original.trigger = template.trigger;
+            original.message = template.message;
+            original.updatedAt = new Date(updated.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        }
+        this.editingTemplate = null;
+        this.showToast('Template updated successfully.', 'success');
+    },
+
+    cancelEdit() {
+        this.editingTemplate = null;
+    },
+
+    async toggleActive(template) {
+        const res = await fetch('/api/message-templates/' + template.id + '/toggle-active', {
+            method: 'PATCH',
+            headers: { 'Accept': 'application/json' }
+        });
+        if (!res.ok) {
+            this.showToast('Could not update status.', 'error');
+            return;
+        }
+        const updated = await res.json();
+        template.isActive = updated.is_active;
+        this.showToast(template.isActive ? 'Template enabled.' : 'Template disabled.', 'success');
+    },
+
+    async deleteTemplate(template) {
+        if (!confirm('Delete template ' + template.name + '? This cannot be undone.')) {
+            return;
+        }
+        const res = await fetch('/api/message-templates/' + template.id, {
+            method: 'DELETE',
+            headers: { 'Accept': 'application/json' }
+        });
+        if (!res.ok) {
+            this.showToast('Could not delete template.', 'error');
+            return;
+        }
+        this.templates = this.templates.filter(function(t) {
+            return t.id !== template.id;
+        });
+        this.showToast('Template deleted successfully.', 'success');
     }
 }">
+
+    <!-- Toast notification -->
+    <div x-show="toast.show"
+         x-cloak
+         class="fixed inset-0 z-999 flex items-center justify-center bg-black/40 px-4"
+         style="display: none;">
+        <div x-show="toast.show"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0 scale-95"
+             x-transition:enter-end="opacity-100 scale-100"
+             @click.away="toast.show = false"
+             class="w-full max-w-sm rounded-xl bg-white p-6 text-center shadow-theme-lg dark:bg-gray-900">
+
+            <div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full"
+                 :class="toast.type === 'success' ? 'bg-green-50 dark:bg-green-500/15' : 'bg-red-50 dark:bg-red-500/15'">
+                <svg x-show="toast.type === 'success'" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green-600 dark:text-green-400"/>
+                </svg>
+                <svg x-show="toast.type === 'error'" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-red-600 dark:text-red-400"/>
+                </svg>
+            </div>
+
+            <h3 class="mb-1 text-base font-semibold text-gray-800 dark:text-white/90"
+                x-text="toast.type === 'success' ? 'Success' : 'Failed'"></h3>
+            <p class="mb-5 text-theme-sm text-gray-500 dark:text-gray-400" x-text="toast.message"></p>
+
+            <button @click="toast.show = false" type="button"
+                class="w-full rounded-lg bg-brand-500 px-4 py-2.5 text-theme-sm font-medium text-white transition hover:bg-brand-600">
+                OK
+            </button>
+        </div>
+    </div>
+
+    <!-- Edit Template Modal -->
+    <div x-show="editingTemplate !== null"
+         x-cloak
+         class="fixed inset-0 z-999 flex items-center justify-center bg-black/40 px-4"
+         style="display: none;">
+        <div x-show="editingTemplate !== null"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0 scale-95"
+             x-transition:enter-end="opacity-100 scale-100"
+             @click.away="cancelEdit()"
+             class="w-full max-w-lg rounded-xl bg-white p-6 shadow-theme-lg dark:bg-gray-900">
+
+            <h3 class="mb-4 text-base font-semibold text-gray-800 dark:text-white/90">
+                Edit Template
+            </h3>
+
+            <template x-if="editingTemplate">
+                <div class="space-y-4">
+                    <div>
+                        <label class="mb-1.5 block text-theme-xs font-medium text-gray-500 dark:text-gray-400">Template Name</label>
+                        <input type="text" x-model="editingTemplate.name"
+                            class="h-10 w-full rounded-lg border border-gray-300 bg-transparent px-3 text-theme-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:text-white/90" />
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-theme-xs font-medium text-gray-500 dark:text-gray-400">Trigger</label>
+                        <input type="text" x-model="editingTemplate.trigger"
+                            class="h-10 w-full rounded-lg border border-gray-300 bg-transparent px-3 text-theme-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:text-white/90" />
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-theme-xs font-medium text-gray-500 dark:text-gray-400">Message</label>
+                        <textarea x-model="editingTemplate.message" rows="8"
+                            class="w-full rounded-lg border border-gray-300 bg-transparent px-3 py-2 text-theme-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:text-white/90"></textarea>
+                    </div>
+                </div>
+            </template>
+
+            <div class="mt-6 flex justify-end gap-2">
+                <button @click="cancelEdit()" type="button"
+                    class="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-theme-sm font-medium text-gray-600 shadow-theme-xs transition hover:bg-gray-50 dark:border-gray-700 dark:bg-white/[0.03] dark:text-gray-300 dark:hover:bg-white/[0.05]">
+                    Cancel
+                </button>
+                <button @click="saveEdit()" type="button"
+                    class="inline-flex items-center gap-1.5 rounded-lg bg-brand-500 px-4 py-2.5 text-theme-sm font-medium text-white shadow-theme-xs transition hover:bg-brand-600">
+                    Save Changes
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
+
+        <div class="flex flex-wrap items-end gap-3 border-b border-gray-100 px-5 py-4 dark:border-gray-800 sm:px-6">
+            <div class="min-w-[160px] flex-1">
+                <label class="mb-1.5 block text-theme-xs font-medium text-gray-500 dark:text-gray-400">Template Name</label>
+                <input type="text" x-model="newTemplateName" placeholder="e.g. Queue Confirmation"
+                    class="h-10 w-full rounded-lg border border-gray-300 bg-transparent px-3 text-theme-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:text-white/90" />
+            </div>
+            <div class="min-w-[160px] flex-1">
+                <label class="mb-1.5 block text-theme-xs font-medium text-gray-500 dark:text-gray-400">Trigger</label>
+                <input type="text" x-model="newTemplateTrigger" placeholder="e.g. Customer joins queue"
+                    class="h-10 w-full rounded-lg border border-gray-300 bg-transparent px-3 text-theme-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:text-white/90" />
+            </div>
+            <div class="min-w-[220px] flex-[2]">
+                <label class="mb-1.5 block text-theme-xs font-medium text-gray-500 dark:text-gray-400">Message</label>
+                <input type="text" x-model="newTemplateMessage" placeholder="e.g. Hi {name}, you are #{queueNumber} in line."
+                    class="h-10 w-full rounded-lg border border-gray-300 bg-transparent px-3 text-theme-sm text-gray-800 outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:text-white/90" />
+            </div>
+            <button @click="addTemplate()" type="button"
+                class="inline-flex h-10 items-center gap-1.5 rounded-lg bg-brand-500 px-4 text-theme-sm font-medium text-white shadow-theme-xs transition hover:bg-brand-600">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none">
+                    <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Add Template
+            </button>
+        </div>
+
         <div class="max-w-full overflow-x-auto custom-scrollbar">
-            <table class="w-full min-w-[1102px]">
+            <table class="w-full min-w-[1150px]">
                 <thead>
                     <tr class="border-b border-gray-100 dark:border-gray-800">
-                        <th class="px-5 py-3 text-left sm:px-6">
-                            <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
-                                Template Name
-                            </p>
-                        </th>
-                        <th class="px-5 py-3 text-left sm:px-6">
-                            <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
-                                Trigger
-                            </p>
-                        </th>
-                        <th class="px-5 py-3 text-left sm:px-6">
-                            <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
-                                Message
-                            </p>
-                        </th>
-                        <th class="px-5 py-3 text-left sm:px-6">
-                            <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
-                                Status
-                            </p>
-                        </th>
-                        <th class="px-5 py-3 text-left sm:px-6">
-                            <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
-                                Actions
-                            </p>
-                        </th>
+                        <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">ID</p></th>
+                        <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Template Name</p></th>
+                        <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Trigger</p></th>
+                        <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Message</p></th>
+                        <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Status</p></th>
+                        <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Actions</p></th>
                     </tr>
                 </thead>
                 <tbody>
                     <template x-for="template in templates" :key="template.id">
                         <tr class="border-b border-gray-100 dark:border-gray-800">
-
                             <td class="px-5 py-4 sm:px-6">
-                                <template x-if="!template.editing">
-                                    <div>
-                                        <span class="block font-medium text-gray-800 text-theme-sm dark:text-white/90" x-text="template.name"></span>
-                                    </div>
-                                </template>
-                                <template x-if="template.editing">
-                                    <input type="text" x-model="template.name" class="w-full rounded-lg border border-brand-300 px-2 py-1.5 text-theme-sm ring-3 ring-brand-500/10 dark:border-brand-700 dark:bg-gray-800 dark:text-white/90" />
-                                </template>
+                                <span class="text-gray-500 text-theme-sm dark:text-gray-400" x-text="template.id"></span>
                             </td>
-
                             <td class="px-5 py-4 sm:px-6">
-                                <template x-if="!template.editing">
-                                    <p class="text-gray-500 text-theme-sm dark:text-gray-400" x-text="template.trigger"></p>
-                                </template>
-                                <template x-if="template.editing">
-                                    <input type="text" x-model="template.trigger" class="w-full rounded-lg border border-brand-300 px-2 py-1.5 text-theme-sm ring-3 ring-brand-500/10 dark:border-brand-700 dark:bg-gray-800 dark:text-white/90" />
-                                </template>
+                                <span class="block font-medium text-gray-800 text-theme-sm dark:text-white/90" x-text="template.name"></span>
                             </td>
-
                             <td class="px-5 py-4 sm:px-6">
-                                <template x-if="!template.editing">
-                                    <p class="max-w-[260px] truncate text-gray-500 text-theme-sm dark:text-gray-400" :title="template.message" x-text="template.message"></p>
-                                </template>
-                                <template x-if="template.editing">
-                                    <textarea x-model="template.message" rows="2" class="w-full rounded-lg border border-brand-300 px-2 py-1.5 text-theme-sm ring-3 ring-brand-500/10 dark:border-brand-700 dark:bg-gray-800 dark:text-white/90"></textarea>
-                                </template>
+                                <p class="text-gray-500 text-theme-sm dark:text-gray-400" x-text="template.trigger"></p>
                             </td>
-
+                            <td class="px-5 py-4 sm:px-6">
+                                <p class="max-w-[260px] truncate text-gray-500 text-theme-sm dark:text-gray-400" :title="template.message" x-text="template.message"></p>
+                            </td>
                             <td class="px-5 py-4 sm:px-6">
                                 <span class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-theme-xs font-medium"
                                    :class="template.isActive ? 'bg-green-50 text-green-700 dark:bg-green-500/15 dark:text-green-500' : 'bg-gray-100 text-gray-500 dark:bg-gray-500/15 dark:text-gray-400'">
-                                    <svg class="h-1.5 w-1.5 fill-current" viewBox="0 0 8 8">
-                                        <circle cx="4" cy="4" r="4" />
-                                    </svg>
+                                    <svg class="h-1.5 w-1.5 fill-current" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" /></svg>
                                     <span x-text="template.isActive ? 'Active' : 'Inactive'"></span>
                                 </span>
                             </td>
-
                             <td class="px-5 py-4 sm:px-6">
                                 <div class="flex items-center gap-2">
-
-                                    <template x-if="!template.editing">
-                                        <button
-                                            @click="startEdit(template)"
-                                            type="button"
-                                            title="Edit template"
-                                            class="inline-flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50 p-2 text-blue-600 shadow-theme-xs transition hover:bg-blue-100 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none">
-                                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                                            </svg>
-                                        </button>
-                                    </template>
-
-                                    <template x-if="template.editing">
-                                        <button
-                                            @click="saveEdit(template)"
-                                            type="button"
-                                            title="Save changes"
-                                            class="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-2 text-theme-xs font-medium text-white shadow-theme-xs transition hover:bg-green-700">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none">
-                                                <path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                            </svg>
-                                            Save
-                                        </button>
-                                    </template>
-
-                                    <template x-if="template.editing">
-                                        <button
-                                            @click="cancelEdit(template)"
-                                            type="button"
-                                            title="Discard changes"
-                                            class="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-theme-xs font-medium text-gray-600 shadow-theme-xs transition hover:bg-gray-50 dark:border-gray-700 dark:bg-white/[0.03] dark:text-gray-300 dark:hover:bg-white/[0.05]">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none">
-                                                <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                            </svg>
-                                            Cancel
-                                        </button>
-                                    </template>
-
-                                    <!-- Toggle Active/Inactive: red for disable, green for enable -->
-                                    <button
-                                        @click="toggleActive(template)"
-                                        type="button"
+                                    <button @click="startEdit(template)" type="button" title="Edit template"
+                                        class="inline-flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50 p-2 text-blue-600 shadow-theme-xs transition hover:bg-blue-100 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                        </svg>
+                                    </button>
+                                    <button @click="toggleActive(template)" type="button"
                                         :title="template.isActive ? 'Disable this template' : 'Enable this template'"
                                         class="inline-flex items-center justify-center rounded-lg border p-2 shadow-theme-xs transition"
                                         :class="template.isActive
@@ -225,17 +302,10 @@
                                             <path d="M18.36 6.64a9 9 0 1 1-12.73 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                                         </svg>
                                     </button>
-
-                                    <button
-                                        @click="deleteTemplate(template)"
-                                        type="button"
-                                        title="Delete template permanently"
+                                    <button @click="deleteTemplate(template)" type="button" title="Delete template permanently"
                                         class="ml-1 inline-flex items-center justify-center rounded-lg border border-red-200 bg-white p-2 text-red-500 shadow-theme-xs transition hover:border-red-300 hover:bg-red-50 dark:border-red-500/30 dark:bg-white/[0.03] dark:text-red-400 dark:hover:bg-red-500/10">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none">
-                                            <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                                        </svg>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
                                     </button>
-
                                 </div>
                             </td>
                         </tr>
