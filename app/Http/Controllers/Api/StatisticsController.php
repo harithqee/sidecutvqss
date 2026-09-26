@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Barber;
 use App\Models\QueueSession;
 use App\Models\QueueTicket;
+use App\Models\Service;
+use App\Services\QueueingCalculator;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,10 +18,11 @@ class StatisticsController extends Controller
      * Summary metric cards: customers today, avg wait, avg service, completion rate,
      * each with a percentage change versus yesterday.
      */
-    public function summary(): JsonResponse
+    public function summary(QueueingCalculator $calc): JsonResponse
     {
         $today = $this->calcDayStats(today());
         $yesterday = $this->calcDayStats(today()->subDay());
+        $queueing = $this->calcQueueingMetrics($today, $calc);
 
         return response()->json([
             'customers_today' => $today['total'],
@@ -30,7 +33,51 @@ class StatisticsController extends Controller
             'avg_wait_change_pct' => $this->pctChange($yesterday['avg_wait'], $today['avg_wait']),
             'avg_service_change_pct' => $this->pctChange($yesterday['avg_service'], $today['avg_service']),
             'completion_rate_change_pct' => $this->pctChange($yesterday['completion_rate'], $today['completion_rate']),
+
+            // --- Queueing theory (M/M/S) model, computed from today's session ---
+            'servers_active' => $queueing['servers'],
+            'utilization_pct' => $queueing['rho'] !== null ? round($queueing['rho'] * 100, 1) : null,
+            'predicted_wait_minutes' => $queueing['Wq'] !== null ? round($queueing['Wq'] * 60, 1) : null,
+            'avg_in_queue' => $queueing['Lq'] !== null ? round($queueing['Lq'], 2) : null,
+            'avg_in_system' => $queueing['L'] !== null ? round($queueing['L'], 2) : null,
+            'queue_model_stable' => $queueing['stable'],
         ]);
+    }
+
+    /**
+     * Derives λ (arrivals/hour), μ (service rate per barber/hour) and S (active
+     * barbers) from today's session, then runs the M/M/S model. This is the
+     * theory-backed replacement for the flat "waiting * 15 minutes" guess used
+     * in QueueTicketController::estimateWait().
+     */
+    private function calcQueueingMetrics(array $todayStats, QueueingCalculator $calc): array
+    {
+        $session = QueueSession::whereDate('session_date', today())->first();
+        $servers = max(Barber::where('is_active', true)->count(), 1);
+
+        if (!$session || $todayStats['total'] === 0) {
+            return ['rho' => 0.0, 'Lq' => 0.0, 'L' => 0.0, 'Wq' => 0.0, 'stable' => true, 'servers' => $servers];
+        }
+
+        // Hours the session has been open (avoid divide-by-zero right at open).
+        $hoursElapsed = max(($session->opened_at ?? now())->diffInMinutes(now()) / 60, 1 / 60);
+        $lambda = $todayStats['total'] / $hoursElapsed;
+
+        // avg_service is in minutes (completed tickets today) -> convert to a per-hour rate.
+        // Early in the day (or with a thin sample) this can be 0, which would make μ
+        // uncomputable — fall back to the shop's configured Service.duration_minutes
+        // so the model still has a usable estimate instead of going to all-zeros.
+        $avgServiceMinutes = $todayStats['avg_service'] > 0
+            ? $todayStats['avg_service']
+            : (Service::where('is_active', true)->avg('duration_minutes') ?? 0);
+
+        $mu = $avgServiceMinutes > 0 ? 60 / $avgServiceMinutes : 0.0;
+
+        $result = ($lambda > 0 && $mu > 0)
+            ? $calc->mms($lambda, $mu, $servers)
+            : ['rho' => 0.0, 'Lq' => 0.0, 'L' => 0.0, 'Wq' => 0.0, 'stable' => true];
+
+        return $result + ['servers' => $servers];
     }
 
     private function calcDayStats($date): array

@@ -10,6 +10,7 @@ use App\Http\Requests\UpdateQueueTicketStatusRequest;
 use App\Services\TextBeeService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use App\Models\MessageTemplate;
 
 class QueueTicketController extends Controller
 {
@@ -172,32 +173,47 @@ class QueueTicketController extends Controller
      * to sms_logs, so every automated and manual send is auditable.
      */
     private function sendAndLogSms(QueueTicket $ticket, int $templateId, array $variables): ?array
-    {
-        try {
-            $result = $this->textBee->sendById($templateId, $ticket->customer_phone, $variables);
+{
+    $template = MessageTemplate::find($templateId);
 
-            $ticket->smsLogs()->create([
-                'message_template_id' => $templateId,
-                'phone' => $ticket->customer_phone,
-                'message_body' => $result['message'],
-                'status' => 'sent',
-                'sent_at' => now(),
-            ]);
+    if (!$template || !$template->is_active) {
+        $ticket->smsLogs()->create([
+            'message_template_id' => $templateId,
+            'phone' => $ticket->customer_phone,
+            'message_body' => '',
+            'status' => 'skipped',
+            'sent_at' => null,
+        ]);
 
-            return $result;
-        } catch (\Throwable $e) {
-            $ticket->smsLogs()->create([
-                'message_template_id' => $templateId,
-                'phone' => $ticket->customer_phone,
-                'message_body' => '',
-                'status' => 'failed',
-                'sent_at' => null,
-            ]);
-
-            \Log::warning("TextBee send failed (template {$templateId}): " . $e->getMessage());
-            return null;
-        }
+        \Log::info("SMS skipped — template {$templateId} is inactive or missing.");
+        return null;
     }
+
+    try {
+        $result = $this->textBee->sendById($templateId, $ticket->customer_phone, $variables);
+
+        $ticket->smsLogs()->create([
+            'message_template_id' => $templateId,
+            'phone' => $ticket->customer_phone,
+            'message_body' => $result['message'],
+            'status' => 'sent',
+            'sent_at' => now(),
+        ]);
+
+        return $result;
+    } catch (\Throwable $e) {
+        $ticket->smsLogs()->create([
+            'message_template_id' => $templateId,
+            'phone' => $ticket->customer_phone,
+            'message_body' => '',
+            'status' => 'failed',
+            'sent_at' => null,
+        ]);
+
+        \Log::warning("TextBee send failed (template {$templateId}): " . $e->getMessage());
+        return null;
+    }
+}
 
     /**
      * Simple heuristic wait-time estimate based on how many are currently waiting.
