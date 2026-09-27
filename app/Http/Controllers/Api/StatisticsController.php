@@ -46,20 +46,21 @@ class StatisticsController extends Controller
     {
         $session = QueueSession::whereDate('session_date', today())->first();
         $servers = max(Barber::where('is_active', true)->count(), 1);
-        $modelCustomers = $session
-            ? $session->tickets()->whereIn('status', ['in_queue', 'serving', 'completed'])->count()
+        $activeCustomers = $session
+            ? $session->tickets()->whereIn('status', ['in_queue', 'serving'])->count()
             : 0;
 
-        if (!$session || $modelCustomers === 0) {
+        if (!$session || $activeCustomers === 0) {
             return ['rho' => 0.0, 'Lq' => 0.0, 'L' => 0.0, 'Wq' => 0.0, 'stable' => true, 'servers' => $servers];
         }
 
         // Hours the session has been open (avoid divide-by-zero right at open).
         $hoursElapsed = max(($session->opened_at ?? now())->diffInMinutes(now()) / 60, 1 / 60);
-        // Canceled tickets are not active arrivals for the queueing model.
-        $lambda = $modelCustomers / $hoursElapsed;
+        // Only customers still waiting or being served contribute to utilization.
+        $lambda = $activeCustomers / $hoursElapsed;
 
-        // Only use completed service durations recorded in today's session.
+        // Completed tickets remain useful for estimating each barber's service rate;
+        // their status does not contribute to the active-customer count above.
         $avgServiceMinutes = $todayStats['avg_service'];
 
         $mu = $avgServiceMinutes > 0 ? 60 / $avgServiceMinutes : 0.0;
