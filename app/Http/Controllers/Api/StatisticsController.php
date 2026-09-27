@@ -117,7 +117,7 @@ class StatisticsController extends Controller
     }
 
     /**
-     * Hourly breakdown (9AM-8PM) for the Queue Statistics chart:
+     * Hourly breakdown for the Queue Statistics chart:
      * overview (ticket count), peakHours (same as overview), waitTimes (avg wait per hour).
      * Accepts optional ?from=YYYY-MM-DD&to=YYYY-MM-DD query params.
      */
@@ -125,25 +125,38 @@ class StatisticsController extends Controller
 {
     $from = $request->query('from', now()->subDays(6)->toDateString());
     $to = $request->query('to', now()->toDateString());
+    // The shop operates from 11:00 AM through 10:59 PM. Keep the 10 PM
+    // bucket inclusive so every ticket joined during the final open hour is counted.
     $hours = range(11, 22);
 
+    // Match QueueTicketController::history: the chart summarizes the same
+    // completed and canceled tickets shown in Queue History.
     $baseQuery = QueueTicket::whereIn('status', ['completed', 'canceled'])
         ->whereHas('session', function ($s) use ($from, $to) {
             $s->whereBetween('session_date', [$from, $to]);
         });
 
-    $counts = (clone $baseQuery)
-        ->whereRaw('HOUR(joined_at) between 11 and 22')
-        ->selectRaw('HOUR(joined_at) as hour, count(*) as total')
-        ->groupBy('hour')
-        ->pluck('total', 'hour');
+    // Match the local times shown in Queue History. Database timestamps are
+    // stored in UTC, while the shop timezone is configured for maintenance.
+    $shopTimezone = config('app.maintenance.timezone', config('app.timezone'));
+    $hourlyCounts = array_fill_keys($hours, 0);
+    $hourlyWaits = array_fill_keys($hours, []);
 
-    $waits = (clone $baseQuery)
-        ->whereNotNull('served_at')
-        ->whereRaw('HOUR(joined_at) between 11 and 22')
-        ->selectRaw('HOUR(joined_at) as hour, AVG(TIMESTAMPDIFF(MINUTE, joined_at, served_at)) as avg_wait')
-        ->groupBy('hour')
-        ->pluck('avg_wait', 'hour');
+    (clone $baseQuery)->get(['joined_at', 'served_at'])->each(function ($ticket) use (&$hourlyCounts, &$hourlyWaits, $shopTimezone) {
+        $joinedAt = $ticket->joined_at->copy()->timezone($shopTimezone);
+        $hour = (int) $joinedAt->format('G');
+
+        if (!array_key_exists($hour, $hourlyCounts)) {
+            return;
+        }
+
+        $hourlyCounts[$hour]++;
+
+        if ($ticket->served_at) {
+            $servedAt = $ticket->served_at->copy()->timezone($shopTimezone);
+            $hourlyWaits[$hour][] = $joinedAt->diffInMinutes($servedAt);
+        }
+    });
 
     $categories = [];
     $overview = [];
@@ -151,8 +164,10 @@ class StatisticsController extends Controller
 
     foreach ($hours as $h) {
         $categories[] = \Carbon\Carbon::createFromTime($h)->format('gA');
-        $overview[] = (int) ($counts[$h] ?? 0);
-        $waitTimes[] = round((float) ($waits[$h] ?? 0), 1);
+        $overview[] = $hourlyCounts[$h];
+        $waitTimes[] = $hourlyWaits[$h]
+            ? round(array_sum($hourlyWaits[$h]) / count($hourlyWaits[$h]), 1)
+            : 0;
     }
 
     return response()->json([
