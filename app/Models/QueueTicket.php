@@ -15,13 +15,16 @@ class QueueTicket extends Model
     protected $fillable = [
         'queue_session_id', 'barber_id', 'service_id',
         'customer_name', 'customer_phone', 'queue_number',
-        'status', 'joined_at', 'served_at', 'finished_at',
+        'status', 'is_calling', 'joined_at', 'called_at', 'call_version', 'served_at', 'finished_at',
     ];
 
     protected $casts = [
         'joined_at' => 'datetime',
+        'called_at' => 'datetime',
         'served_at' => 'datetime',
         'finished_at' => 'datetime',
+        'is_calling' => 'boolean',
+        'call_version' => 'integer',
     ];
 
     public function session(): BelongsTo

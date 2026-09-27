@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\Barber;
 use App\Models\QueueSession;
 use App\Models\QueueTicket;
-use App\Models\Service;
 use App\Services\QueueingCalculator;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -15,13 +14,11 @@ use Illuminate\Http\Request;
 class StatisticsController extends Controller
 {
     /**
-     * Summary metric cards: customers today, avg wait, avg service, completion rate,
-     * each with a percentage change versus yesterday.
+     * Summary metrics and queue model for today's session only.
      */
     public function summary(QueueingCalculator $calc): JsonResponse
     {
         $today = $this->calcDayStats(today());
-        $yesterday = $this->calcDayStats(today()->subDay());
         $queueing = $this->calcQueueingMetrics($today, $calc);
 
         return response()->json([
@@ -29,11 +26,6 @@ class StatisticsController extends Controller
             'avg_wait_minutes' => $today['avg_wait'],
             'avg_service_minutes' => $today['avg_service'],
             'completion_rate' => $today['completion_rate'],
-            'customers_change_pct' => $this->pctChange($yesterday['total'], $today['total']),
-            'avg_wait_change_pct' => $this->pctChange($yesterday['avg_wait'], $today['avg_wait']),
-            'avg_service_change_pct' => $this->pctChange($yesterday['avg_service'], $today['avg_service']),
-            'completion_rate_change_pct' => $this->pctChange($yesterday['completion_rate'], $today['completion_rate']),
-
             // --- Queueing theory (M/M/S) model, computed from today's session ---
             'servers_active' => $queueing['servers'],
             'utilization_pct' => $queueing['rho'] !== null ? round($queueing['rho'] * 100, 1) : null,
@@ -54,22 +46,21 @@ class StatisticsController extends Controller
     {
         $session = QueueSession::whereDate('session_date', today())->first();
         $servers = max(Barber::where('is_active', true)->count(), 1);
+        $modelCustomers = $session
+            ? $session->tickets()->whereIn('status', ['in_queue', 'serving', 'completed'])->count()
+            : 0;
 
-        if (!$session || $todayStats['total'] === 0) {
+        if (!$session || $modelCustomers === 0) {
             return ['rho' => 0.0, 'Lq' => 0.0, 'L' => 0.0, 'Wq' => 0.0, 'stable' => true, 'servers' => $servers];
         }
 
         // Hours the session has been open (avoid divide-by-zero right at open).
         $hoursElapsed = max(($session->opened_at ?? now())->diffInMinutes(now()) / 60, 1 / 60);
-        $lambda = $todayStats['total'] / $hoursElapsed;
+        // Canceled tickets are not active arrivals for the queueing model.
+        $lambda = $modelCustomers / $hoursElapsed;
 
-        // avg_service is in minutes (completed tickets today) -> convert to a per-hour rate.
-        // Early in the day (or with a thin sample) this can be 0, which would make μ
-        // uncomputable — fall back to the shop's configured Service.duration_minutes
-        // so the model still has a usable estimate instead of going to all-zeros.
-        $avgServiceMinutes = $todayStats['avg_service'] > 0
-            ? $todayStats['avg_service']
-            : (Service::where('is_active', true)->avg('duration_minutes') ?? 0);
+        // Only use completed service durations recorded in today's session.
+        $avgServiceMinutes = $todayStats['avg_service'];
 
         $mu = $avgServiceMinutes > 0 ? 60 / $avgServiceMinutes : 0.0;
 
@@ -106,14 +97,6 @@ class StatisticsController extends Controller
             'avg_service' => round((float) ($avgService ?? 0), 1),
             'completion_rate' => $total > 0 ? round(($completed / $total) * 100, 1) : 0,
         ];
-    }
-
-    private function pctChange($old, $new): float
-    {
-        if ($old == 0) {
-            return $new > 0 ? 100.0 : 0.0;
-        }
-        return round((($new - $old) / $old) * 100, 1);
     }
 
     /**

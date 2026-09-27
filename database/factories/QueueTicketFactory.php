@@ -5,7 +5,7 @@ namespace Database\Factories;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use App\Models\QueueSession;
 use App\Models\Barber;
-use App\Models\Service;
+use Carbon\Carbon;
 
 /**
  * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\QueueTicket>
@@ -19,89 +19,30 @@ class QueueTicketFactory extends Factory
      */
     public function definition(): array
     {
-        $joined = fake()->dateTimeBetween('-2 hours', 'now');
-
-        // Weighted so history (completed/canceled) has plenty of rows to page through
-        $status = fake()->randomElement([
-            'completed', 'completed', 'completed', 'completed',
-            'canceled',
-            'serving',
-            'in_queue',
-        ]);
-
-        $servedAt = null;
-        $finishedAt = null;
-
-        // Only 'serving' and 'completed' tickets have been served
-        if (in_array($status, ['serving', 'completed'])) {
-            $servedAt = fake()->dateTimeBetween($joined, 'now');
-        }
-
-        // Only 'completed' tickets have a finish time, and it must be after served_at
-        if ($status === 'completed') {
-            $finishedAt = fake()->dateTimeBetween($servedAt, 'now');
-        }
+        $now = Carbon::now();
+        $joined = $now->copy()->subMinutes(fake()->numberBetween(0, 180));
 
         return [
-            'queue_session_id' => QueueSession::factory(),
-            'barber_id' => Barber::factory(),
-            'service_id' => Service::factory(),
+            'queue_session_id' => fn () => QueueSession::today()->getKey(),
+            // Assign an existing active barber when available; never create
+            // a barber as a side effect of making a queue ticket.
+            'barber_id' => fn () => Barber::query()
+                ->where('is_active', true)
+                ->inRandomOrder()
+                ->value('id'),
+            'service_id' => null,
             'customer_name' => fake()->name(),
             'customer_phone' => fake()->numerify('01#-#######'),
-            'queue_number' => fake()->unique()->numberBetween(1, 1000),
-            'status' => $status,
+            // Three-digit ticket numbers, matching the public queue display.
+            'queue_number' => fake()->unique()->numberBetween(100, 999),
+            'status' => 'in_queue',
+            'is_calling' => false,
             'joined_at' => $joined,
-            'served_at' => $servedAt,
-            'finished_at' => $finishedAt,
-        ];
-    }
-
-    /**
-     * Ticket that was completed: has both served_at and finished_at.
-     */
-    public function completed(): static
-    {
-        return $this->state(function (array $attributes) {
-            $joined = $attributes['joined_at'] ?? fake()->dateTimeBetween('-2 hours', 'now');
-            $servedAt = fake()->dateTimeBetween($joined, 'now');
-            $finishedAt = fake()->dateTimeBetween($servedAt, 'now');
-
-            return [
-                'status' => 'completed',
-                'joined_at' => $joined,
-                'served_at' => $servedAt,
-                'finished_at' => $finishedAt,
-            ];
-        });
-    }
-
-    /**
-     * Ticket that was canceled before being served.
-     */
-    public function canceled(): static
-    {
-        return $this->state(fn (array $attributes) => [
-            'status' => 'canceled',
+            'called_at' => null,
+            'call_version' => 0,
             'served_at' => null,
             'finished_at' => null,
-        ]);
-    }
-
-    /**
-     * Ticket currently being served (no finish time yet).
-     */
-    public function serving(): static
-    {
-        return $this->state(function (array $attributes) {
-            $joined = $attributes['joined_at'] ?? fake()->dateTimeBetween('-2 hours', 'now');
-
-            return [
-                'status' => 'serving',
-                'joined_at' => $joined,
-                'served_at' => fake()->dateTimeBetween($joined, 'now'),
-                'finished_at' => null,
-            ];
-        });
+        ];
     }
 
     /**
@@ -113,6 +54,19 @@ class QueueTicketFactory extends Factory
             'status' => 'in_queue',
             'served_at' => null,
             'finished_at' => null,
+            'is_calling' => false,
+            'called_at' => null,
+            'call_version' => 0,
+        ]);
+    }
+
+    /** Waiting ticket currently announced on the public calling board. */
+    public function called(): static
+    {
+        return $this->inQueue()->state(fn () => [
+            'is_calling' => true,
+            'called_at' => now()->subMinutes(fake()->numberBetween(0, 5)),
+            'call_version' => 1,
         ]);
     }
 }

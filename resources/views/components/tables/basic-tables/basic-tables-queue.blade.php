@@ -31,7 +31,10 @@
                 },
                 queueNumber: '#' + t.queue_number,
                 server: (t.barber && t.barber.name) || '—',
-                status: t.status
+                status: t.status,
+                isCalling: !!t.is_calling,
+                calledAt: t.called_at,
+                callVersion: t.call_version || 0
             };
         });
     },
@@ -71,9 +74,33 @@
         if (status === 'completed') {
             this.showToast('Ticket completed and SMS receipt sent.', 'success');
         } else {
-            this.showToast('Ticket canceled.', 'success');
+            this.showToast(order.status === 'serving'
+                ? 'Call canceled. The ticket was removed from the calling board.'
+                : 'Ticket canceled.', 'success');
         }
     }
+    },
+
+    async callCustomer(order) {
+        try {
+            const res = await fetch('/api/queue/' + order.id + '/call', {
+                method: 'POST',
+                headers: { 'Accept': 'application/json' }
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                this.showToast(data.message || 'Could not call this customer.', 'error');
+                return;
+            }
+
+            this.orders.forEach(ticket => { ticket.isCalling = false; });
+            order.isCalling = true;
+            order.calledAt = data.called_at;
+            order.callVersion = data.call_version;
+            this.showToast('Ticket ' + order.queueNumber + ' called to the counter. Status remains In Queue.', 'success');
+        } catch (error) {
+            this.showToast('Could not reach the queue. Please try again.', 'error');
+        }
     },
 
     startServing(order) {
@@ -164,6 +191,14 @@
                                         </svg>
                                         SMS
                                     </button>
+                                    <template x-if="order.status === 'in_queue'">
+                                        <button @click="callCustomer(order)" type="button"
+                                            class="inline-flex items-center gap-1.5 rounded-lg border border-brand-300 bg-brand-50 px-3 py-2 text-theme-xs font-medium text-brand-700 shadow-theme-xs transition hover:bg-brand-100 dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-300 dark:hover:bg-brand-500/20">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7L8 5z" fill="currentColor"/></svg>
+                                            <span x-text="order.isCalling ? 'Call again' : 'Call to counter'">Call to counter</span>
+                                        </button>
+                                    </template>
+
                                     <template x-if="order.status === 'in_queue'">
                                         <button @click="startServing(order)" type="button"
                                             class="inline-flex items-center gap-1.5 rounded-lg bg-yellow-500 px-3 py-2 text-theme-xs font-medium text-white shadow-theme-xs transition hover:bg-yellow-600">

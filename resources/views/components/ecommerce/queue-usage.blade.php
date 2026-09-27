@@ -2,21 +2,26 @@
      x-data="{
         currentlyInQueue: 0,
         utilizationPercent: 0,
+        queueActive: false,
         isLive: true,
+        userPaused: false,
         intervalId: null,
         chart: null,
 
         get utilizationLabel() {
+            if (!this.queueActive) return { text: 'Paused', class: 'bg-gray-100 text-gray-600 dark:bg-gray-500/15 dark:text-gray-300' };
             if (this.utilizationPercent >= 90) return { text: 'Near Full', class: 'bg-red-50 text-red-600 dark:bg-red-500/15 dark:text-red-500' };
             if (this.utilizationPercent >= 60) return { text: 'Busy', class: 'bg-yellow-50 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-400' };
             return { text: 'Available', class: 'bg-success-50 text-success-600 dark:bg-success-500/15 dark:text-success-500' };
         },
         get statusMessage() {
+            if (!this.queueActive) return 'Queue usage is paused because no barbers are active.';
             if (this.utilizationPercent >= 90) return 'Queue is nearly at capacity. Consider informing walk-ins of longer wait times.';
             if (this.utilizationPercent >= 60) return 'Queue is busy but manageable. Keep an eye on wait times.';
             return 'Queue has room to spare. Great time to welcome walk-ins!';
         },
         get gaugeColor() {
+            if (!this.queueActive) return '#98A2B3';
             if (this.utilizationPercent >= 90) return '#D92D20';
             if (this.utilizationPercent >= 60) return '#F79009';
             return '#465FFF';
@@ -26,6 +31,15 @@
         // service times and active barbers (see StatisticsController::summary()).
         // No fixed max-capacity involved; this is the real system utilization.
         async fetchQueueData() {
+            const barberRes = await fetch('/api/barbers');
+            const barbers = await barberRes.json();
+            this.queueActive = barbers.some(barber => barber.is_active);
+            this.isLive = this.queueActive && !this.userPaused;
+
+            // Keep checking barber availability when paused, but don't refresh
+            // the displayed queue metrics until live updates resume.
+            if (this.userPaused && this.queueActive) return;
+
             const [queueRes, statsRes] = await Promise.all([
                 fetch('/api/queue'),
                 fetch('/api/stats/summary'),
@@ -34,13 +48,23 @@
             const stats = await statsRes.json();
 
             this.currentlyInQueue = tickets.length;
-            this.utilizationPercent = stats.utilization_pct ?? 0;
+            this.utilizationPercent = this.queueActive ? (stats.utilization_pct ?? 0) : 0;
             this.updateChart();
+        },
+
+        toggleLive() {
+            if (!this.queueActive) {
+                this.isLive = false;
+                return;
+            }
+            this.userPaused = !this.userPaused;
+            this.isLive = !this.userPaused;
+            if (this.isLive) this.fetchQueueData();
         },
 
         startPolling() {
             this.intervalId = setInterval(() => {
-                if (this.isLive) this.fetchQueueData();
+                this.fetchQueueData();
             }, 10000);
         },
 

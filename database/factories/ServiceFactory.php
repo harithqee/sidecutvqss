@@ -16,8 +16,13 @@ class ServiceFactory extends Factory
      */
     public function definition(): array
     {
-        return [
-            //
-        ];
+        $service = fake()->randomElement([
+            ['name' => 'Haircut', 'duration_minutes' => 25, 'price' => 35],
+            ['name' => 'Beard Trim', 'duration_minutes' => 15, 'price' => 20],
+            ['name' => 'Haircut & Beard Trim', 'duration_minutes' => 40, 'price' => 50],
+            ['name' => 'Kids Haircut', 'duration_minutes' => 20, 'price' => 25],
+        ]);
+
+        return $service + ['is_active' => true];
     }
 }

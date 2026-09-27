@@ -23,6 +23,8 @@ Route::prefix('barbers')->group(function () {
 
 Route::prefix('queue')->group(function () {
     Route::get('/', [QueueTicketController::class, 'index']);
+    Route::get('/calling-board', [QueueTicketController::class, 'callingBoard']);
+    Route::post('/{ticket}/call', [QueueTicketController::class, 'call']);
     Route::get('/history', [QueueTicketController::class, 'history']);
     Route::post('/', [QueueTicketController::class, 'store']);
     Route::patch('/{ticket}/status', [QueueTicketController::class, 'updateStatus']);
@@ -44,5 +46,3 @@ Route::prefix('stats')->group(function () {
 });
 
     Route::get('/sms-logs', [SmsLogController::class, 'index']);
-
-

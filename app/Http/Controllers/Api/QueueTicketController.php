@@ -5,12 +5,15 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\QueueSession;
 use App\Models\QueueTicket;
+use App\Models\Barber;
+use App\Models\Service;
 use App\Http\Requests\StoreQueueTicketRequest;
 use App\Http\Requests\UpdateQueueTicketStatusRequest;
 use App\Services\TextBeeService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use App\Models\MessageTemplate;
+use Illuminate\Support\Facades\DB;
 
 class QueueTicketController extends Controller
 {
@@ -21,6 +24,10 @@ class QueueTicketController extends Controller
      */
     public function index(): JsonResponse
     {
+        if (!Barber::where('is_active', true)->exists()) {
+            return response()->json([]);
+        }
+
         $session = QueueSession::today();
 
         $tickets = $session->tickets()
@@ -30,6 +37,98 @@ class QueueTicketController extends Controller
             ->get();
 
         return response()->json($tickets);
+    }
+
+    /** Public live board data for today's queue. */
+    public function callingBoard(): JsonResponse
+    {
+        if (!Barber::where('is_active', true)->exists()) {
+            return response()->json([
+                'queue_active' => false,
+                'current_call' => null,
+                'recent_calls' => [],
+                'upcoming' => [],
+                'waiting_count' => 0,
+                'updated_at' => now()->toIso8601String(),
+            ]);
+        }
+
+        $session = QueueSession::whereDate('session_date', today())->first();
+
+        if (!$session) {
+            return response()->json([
+                'queue_active' => true,
+                'current_call' => null,
+                'recent_calls' => [],
+                'upcoming' => [],
+                'waiting_count' => 0,
+                'updated_at' => now()->toIso8601String(),
+            ]);
+        }
+
+        $activeTickets = $session->tickets()
+            ->with(['barber:id,name', 'service:id,name'])
+            ->whereIn('status', ['in_queue', 'serving'])
+            ->orderBy('queue_number')
+            ->get();
+
+        $mapTicket = static fn (QueueTicket $ticket) => [
+            'id' => $ticket->id,
+            'queue_number' => $ticket->queue_number,
+            'status' => $ticket->status,
+            'barber' => $ticket->barber?->name,
+            'service' => $ticket->service?->name,
+            'called_at' => $ticket->called_at?->toIso8601String(),
+            'call_version' => $ticket->call_version,
+            'served_at' => $ticket->served_at?->toIso8601String(),
+        ];
+
+        $currentCall = $activeTickets->firstWhere('is_calling', true);
+        $recentCalls = $session->tickets()
+            ->with(['barber:id,name', 'service:id,name'])
+            ->whereIn('status', ['in_queue', 'serving', 'completed'])
+            ->whereNotNull('called_at')
+            ->orderByDesc('called_at')
+            ->limit(10)
+            ->get()
+            ->reject(fn (QueueTicket $ticket) => $currentCall && $ticket->id === $currentCall->id)
+            ->take(3)
+            ->values();
+
+        return response()->json([
+            'queue_active' => true,
+            'current_call' => $currentCall ? $mapTicket($currentCall) : null,
+            'recent_calls' => $recentCalls->map($mapTicket),
+            'upcoming' => $activeTickets->where('status', 'in_queue')->take(8)->values()->map($mapTicket),
+            'waiting_count' => $activeTickets->where('status', 'in_queue')->count(),
+            'updated_at' => now()->toIso8601String(),
+        ]);
+    }
+
+    /** Announce a waiting ticket without changing its queue status. */
+    public function call(QueueTicket $ticket): JsonResponse
+    {
+        if (!Barber::where('is_active', true)->exists()) {
+            return response()->json(['message' => 'The queue is paused because no barbers are active.'], 409);
+        }
+
+        if ($ticket->status !== 'in_queue' || !$ticket->session->session_date->isToday()) {
+            return response()->json(['message' => 'Only today’s waiting tickets can be called.'], 422);
+        }
+
+        DB::transaction(function () use ($ticket) {
+            $ticket->session->tickets()
+                ->whereIn('status', ['in_queue', 'serving'])
+                ->where('is_calling', true)
+                ->update(['is_calling' => false]);
+
+            $ticket->increment('call_version', 1, [
+                'is_calling' => true,
+                'called_at' => now(),
+            ]);
+        });
+
+        return response()->json($ticket->fresh(['barber', 'service']));
     }
 
     /**
@@ -59,6 +158,10 @@ class QueueTicketController extends Controller
      */
     public function store(StoreQueueTicketRequest $request): JsonResponse
     {
+        if (!Barber::where('is_active', true)->exists()) {
+            return response()->json(['message' => 'The queue is closed because no barbers are active. Please try again later.'], 409);
+        }
+
         $session = QueueSession::today();
         $nextNumber = $session->tickets()->max('queue_number') + 1;
 
@@ -88,11 +191,37 @@ class QueueTicketController extends Controller
      */
     public function updateStatus(UpdateQueueTicketStatusRequest $request, QueueTicket $ticket): JsonResponse
     {
+        if ($request->status === 'serving' && !Barber::where('is_active', true)->exists()) {
+            return response()->json(['message' => 'The queue is paused because no barbers are active.'], 409);
+        }
+
+        if ($request->status === 'canceled') {
+            $updated = QueueTicket::query()
+                ->whereKey($ticket->getKey())
+                ->whereIn('status', ['in_queue', 'serving'])
+                ->update([
+                    'status' => 'canceled',
+                    'is_calling' => false,
+                    'finished_at' => $ticket->finished_at ?? now(),
+                    'updated_at' => now(),
+                ]);
+
+            if (!$updated) {
+                return response()->json(['message' => 'This ticket is no longer active.'], 409);
+            }
+
+            return response()->json($ticket->fresh());
+        }
+
         $data = ['status' => $request->status];
         $wasNotCompleted = $ticket->status !== 'completed';
 
         if ($request->status === 'serving' && !$ticket->served_at) {
             $data['served_at'] = now();
+        }
+
+        if (in_array($request->status, ['serving', 'completed', 'canceled'])) {
+            $data['is_calling'] = false;
         }
 
         if (in_array($request->status, ['completed', 'canceled']) && !$ticket->finished_at) {
@@ -154,17 +283,34 @@ class QueueTicketController extends Controller
         }
 
         $position = null;
+        $ahead = null;
         if (in_array($ticket->status, ['in_queue', 'serving'])) {
-            $position = $session->tickets()
+            $ahead = $session->tickets()
                 ->whereIn('status', ['in_queue', 'serving'])
-                ->where('queue_number', '<=', $ticket->queue_number)
+                ->where('queue_number', '<', $ticket->queue_number)
                 ->count();
+            $position = $ahead + 1;
         }
+
+        $avgServiceMinutes = (float) $session->tickets()
+            ->where('status', 'completed')
+            ->whereNotNull('served_at')
+            ->whereNotNull('finished_at')
+            ->selectRaw('AVG(TIMESTAMPDIFF(MINUTE, served_at, finished_at)) as average')
+            ->value('average');
+        if ($avgServiceMinutes <= 0) {
+            $avgServiceMinutes = (float) (Service::where('is_active', true)->avg('duration_minutes') ?? 0);
+        }
+        $activeBarbers = max(Barber::where('is_active', true)->count(), 1);
+        $estimatedWait = $ahead !== null && $avgServiceMinutes > 0
+            ? (int) ceil(($ahead * $avgServiceMinutes) / $activeBarbers)
+            : null;
 
         return response()->json([
             'ticket' => $ticket,
             'position' => $position,
-            'estimated_wait_minutes' => $position ? max(0, ($position - 1) * 15) : null,
+            'ahead' => $ahead,
+            'estimated_wait_minutes' => $estimatedWait,
         ]);
     }
 
