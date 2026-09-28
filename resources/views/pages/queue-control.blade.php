@@ -157,7 +157,7 @@
                 </span>
             </div>
             <p class="mt-1 text-theme-sm text-gray-500 dark:text-gray-400">
-                <span x-text="ticket.service?.name || 'Service not specified'"></span> · <span x-text="ticket.barber?.name || 'Any barber'"></span>
+                <span x-text="ticket.barber?.name || 'Any barber'"></span>
             </p>
             <div class="mt-2 flex flex-wrap items-center gap-2 text-theme-xs text-gray-400 dark:text-gray-500">
                 <span x-show="ticket.joined_at">Joined <span x-text="joinedTime(ticket.joined_at)"></span></span>
@@ -324,7 +324,7 @@
                 notifyJoin(ticket) {
                     const barberMatches = this.selectedBarber === 'all' || !ticket.barber_id || String(ticket.barber_id) === this.selectedBarber;
                     if (!barberMatches) return;
-                    this.showToast('New customer joined', `${ticket.customer_name} · ${this.ticketLabel(ticket.queue_number)}${ticket.service?.name ? ' · ' + ticket.service.name : ''}`);
+                    this.showToast('New customer joined', `${ticket.customer_name} · ${this.ticketLabel(ticket.queue_number)}`);
                     if (!this.alertsEnabled) return;
                     if (navigator.vibrate) navigator.vibrate([120, 60, 120]);
                     if ('Notification' in window && Notification.permission === 'granted') {

@@ -17,7 +17,6 @@ function ticket(id, queueNumber, customerName, status = 'in_queue', barberId = 1
         call_version: 0,
         barber_id: barberId,
         barber: barberData.find((barber) => barber.id === barberId),
-        service: { name: 'Haircut' },
         joined_at: now,
         served_at: status === 'serving' ? now : null,
         finished_at: null,

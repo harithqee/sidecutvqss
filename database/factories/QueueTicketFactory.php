@@ -30,7 +30,6 @@ class QueueTicketFactory extends Factory
                 ->where('is_active', true)
                 ->inRandomOrder()
                 ->value('id'),
-            'service_id' => null,
             'customer_name' => fake()->name(),
             'customer_phone' => fake()->numerify('01#-#######'),
             // Three-digit ticket numbers, matching the public queue display.

@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\Barber;
 use App\Models\QueueSession;
 use App\Models\QueueTicket;
-use App\Models\Service;
 use App\Services\QueueingCalculator;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -46,7 +45,7 @@ class StatisticsController extends Controller
         $session = QueueSession::whereDate('session_date', today())->first();
         $servers = Barber::where('is_active', true)->count();
         $activeTickets = $session
-            ? $session->tickets()->with('service:id,duration_minutes')->whereIn('status', ['in_queue', 'serving'])->get()
+            ? $session->tickets()->whereIn('status', ['in_queue', 'serving'])->get()
             : collect();
         if (!$session || $activeTickets->isEmpty()) {
             return ['rho' => 0.0, 'Lq' => 0.0, 'L' => 0.0, 'Wq' => 0.0, 'stable' => true, 'servers' => $servers];
@@ -56,15 +55,11 @@ class StatisticsController extends Controller
             return ['rho' => null, 'Lq' => null, 'L' => null, 'Wq' => null, 'stable' => false, 'servers' => 0];
         }
 
-        // μ is the inverse of average service duration. Use durations attached
-        // to active tickets, falling back to the active service catalog if needed.
-        $serviceDurations = $activeTickets
-            ->map(fn (QueueTicket $ticket) => (float) ($ticket->service?->duration_minutes ?? 0))
-            ->filter(fn (float $minutes) => $minutes > 0);
-        $avgServiceMinutes = $serviceDurations->isNotEmpty() ? $serviceDurations->avg() : 0.0;
-        if ($avgServiceMinutes <= 0) {
-            $avgServiceMinutes = (float) (Service::where('is_active', true)->avg('duration_minutes') ?? 0);
-        }
+        // Estimate service duration from completed tickets in today's session.
+        $avgServiceMinutes = (float) ($session->tickets()
+            ->where('status', 'completed')->whereNotNull('served_at')->whereNotNull('finished_at')
+            ->selectRaw('AVG(TIMESTAMPDIFF(MINUTE, served_at, finished_at)) as average')
+            ->value('average') ?? 0);
 
         if ($avgServiceMinutes <= 0) {
             return ['rho' => 0.0, 'Lq' => 0.0, 'L' => 0.0, 'Wq' => 0.0, 'stable' => true, 'servers' => $servers];

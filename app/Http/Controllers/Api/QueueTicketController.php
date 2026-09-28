@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\QueueSession;
 use App\Models\QueueTicket;
 use App\Models\Barber;
-use App\Models\Service;
 use App\Http\Requests\StoreQueueTicketRequest;
 use App\Http\Requests\UpdateQueueTicketStatusRequest;
 use App\Services\TextBeeService;
@@ -31,7 +30,7 @@ class QueueTicketController extends Controller
         $session = QueueSession::today();
 
         $tickets = $session->tickets()
-            ->with(['barber', 'service'])
+            ->with('barber')
             ->whereIn('status', ['in_queue', 'serving'])
             ->orderBy('queue_number')
             ->get();
@@ -67,7 +66,7 @@ class QueueTicketController extends Controller
         }
 
         $activeTickets = $session->tickets()
-            ->with(['barber:id,name', 'service:id,name'])
+            ->with('barber:id,name')
             ->whereIn('status', ['in_queue', 'serving'])
             ->orderBy('queue_number')
             ->get();
@@ -77,7 +76,6 @@ class QueueTicketController extends Controller
             'queue_number' => $ticket->queue_number,
             'status' => $ticket->status,
             'barber' => $ticket->barber?->name,
-            'service' => $ticket->service?->name,
             'called_at' => $ticket->called_at?->toIso8601String(),
             'call_version' => $ticket->call_version,
             'served_at' => $ticket->served_at?->toIso8601String(),
@@ -85,7 +83,7 @@ class QueueTicketController extends Controller
 
         $currentCall = $activeTickets->firstWhere('is_calling', true);
         $recentCalls = $session->tickets()
-            ->with(['barber:id,name', 'service:id,name'])
+            ->with('barber:id,name')
             ->whereIn('status', ['in_queue', 'serving', 'completed'])
             ->whereNotNull('called_at')
             ->orderByDesc('called_at')
@@ -128,7 +126,7 @@ class QueueTicketController extends Controller
             ]);
         });
 
-        return response()->json($ticket->fresh(['barber', 'service']));
+        return response()->json($ticket->fresh('barber'));
     }
 
     /**
@@ -136,7 +134,7 @@ class QueueTicketController extends Controller
      */
     public function history(Request $request): JsonResponse
     {
-        $tickets = QueueTicket::with(['barber', 'service', 'session'])
+        $tickets = QueueTicket::with(['barber', 'session'])
             ->whereIn('status', ['completed', 'canceled'])
             ->when($request->date, fn ($q) => $q->whereHas(
                 'session',
@@ -195,7 +193,7 @@ class QueueTicketController extends Controller
         ]);
 
         return response()->json([
-            'ticket' => $ticket->load(['barber', 'service']),
+            'ticket' => $ticket->load('barber'),
             'estimated_wait_minutes' => $estimatedWait,
         ], 201);
     }
@@ -289,7 +287,7 @@ class QueueTicketController extends Controller
         $session = QueueSession::today();
 
         $ticket = $session->tickets()
-            ->with(['barber', 'service'])
+            ->with('barber')
             ->where('queue_number', $request->queue_number)
             ->first();
 
@@ -313,9 +311,6 @@ class QueueTicketController extends Controller
             ->whereNotNull('finished_at')
             ->selectRaw('AVG(TIMESTAMPDIFF(MINUTE, served_at, finished_at)) as average')
             ->value('average');
-        if ($avgServiceMinutes <= 0) {
-            $avgServiceMinutes = (float) (Service::where('is_active', true)->avg('duration_minutes') ?? 0);
-        }
         $activeBarbers = max(Barber::where('is_active', true)->count(), 1);
         $estimatedWait = $ahead !== null && $avgServiceMinutes > 0
             ? (int) ceil(($ahead * $avgServiceMinutes) / $activeBarbers)

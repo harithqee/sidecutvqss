@@ -5,7 +5,6 @@ namespace Database\Seeders;
 use App\Models\Barber;
 use App\Models\QueueSession;
 use App\Models\QueueTicket;
-use App\Models\Service;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 
@@ -15,14 +14,9 @@ class QueueTicketSeeder extends Seeder
     {
         $timezone = config('app.maintenance.timezone', config('app.timezone'));
         $activeBarbers = Barber::query()->where('is_active', true)->get();
-        $services = Service::query()->where('is_active', true)->get();
 
         if ($activeBarbers->isEmpty()) {
             $activeBarbers = collect([Barber::factory()->create(['is_active' => true])]);
-        }
-
-        if ($services->isEmpty()) {
-            $services = Service::factory()->count(4)->create();
         }
 
         $today = Carbon::now($timezone)->startOfDay();
@@ -48,7 +42,7 @@ class QueueTicketSeeder extends Seeder
                 $position = $session->tickets()->count() + 1;
                 $queueNumber = ((int) $session->tickets()->max('queue_number')) + 1;
                 $status = $this->statusFor($isToday, $position);
-                $service = $services->random();
+                $serviceMinutes = fake()->numberBetween(15, 35);
                 $now = Carbon::now($timezone)->utc();
 
                 if ($isToday) {
@@ -58,7 +52,7 @@ class QueueTicketSeeder extends Seeder
 
                     if ($status === 'completed') {
                         $finishedAt = $now->copy()->subMinutes(fake()->numberBetween(1, 25));
-                        $servedAt = $finishedAt->copy()->subMinutes($service->duration_minutes);
+                        $servedAt = $finishedAt->copy()->subMinutes($serviceMinutes);
                         $joinedAt = $servedAt->copy()->subMinutes(fake()->numberBetween(5, 20));
                     } elseif ($status === 'canceled') {
                         $finishedAt = $joinedAt->copy()->addMinutes(fake()->numberBetween(3, 8));
@@ -70,7 +64,7 @@ class QueueTicketSeeder extends Seeder
                         ? $joinedAt->copy()->addMinutes(fake()->numberBetween(5, 20))
                         : null;
                     $finishedAt = match ($status) {
-                        'completed' => $servedAt->copy()->addMinutes($service->duration_minutes),
+                        'completed' => $servedAt->copy()->addMinutes($serviceMinutes),
                         'canceled' => $joinedAt->copy()->addMinutes(fake()->numberBetween(3, 10)),
                         default => null,
                     };
@@ -81,7 +75,6 @@ class QueueTicketSeeder extends Seeder
                 QueueTicket::factory()->create([
                     'queue_session_id' => $session->id,
                     'barber_id' => $activeBarbers->random()->id,
-                    'service_id' => $service->id,
                     'customer_name' => fake()->name(),
                     'customer_phone' => fake()->numerify('01#-#######'),
                     'queue_number' => $queueNumber,

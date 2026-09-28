@@ -40,7 +40,7 @@
                 user: {
                     image: self.randomUserImage(),
                     name: t.customer_name,
-                    role: (t.service && t.service.name) || ''
+                    role: ''
                 },
                 queueNumber: '#' + t.queue_number,
                 server: (t.barber && t.barber.name) || '—',
