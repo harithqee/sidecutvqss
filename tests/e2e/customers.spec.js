@@ -112,7 +112,12 @@ test('manage queue page loads live queue controls', async ({ page }) => {
     await expect(barberFilter.locator('option').first()).toHaveText('All barbers');
 
     // The live queue may contain tickets or show its empty state; either means the data loaded.
-    await expect(page.locator('article').first().or(page.getByText('No one in the queue right now'))).toBeVisible();
+    const visibleTickets = page.locator('article:visible');
+    if (await visibleTickets.count()) {
+        await expect(visibleTickets.first()).toBeVisible();
+    } else {
+        await expect(page.locator('div[x-show="visibleTickets.length === 0"]')).toBeVisible();
+    }
 });
 
 test('manage queue can call and call again without changing ticket status', async ({ page }) => {
