@@ -14,6 +14,14 @@ Route::get('/queue', function () {
     return view('pages.queue', ['title' => 'Queue']);
 })->name('queue');
 
+Route::get('/queue-control', function () {
+    return view('pages.queue-control', ['title' => 'Queue Control']);
+})->name('queue-control');
+
+Route::get('/queue-calling', function () {
+    return view('pages.queue-calling', ['title' => 'Queue Calling']);
+})->name('queue-calling');
+
 // messages page
 Route::get('/messages', function () {
     return view('pages.messages', ['title' => 'Messages']);
@@ -115,8 +123,6 @@ Route::get('/image', function () {
 Route::get('/videos', function () {
     return view('pages.ui-elements.videos', ['title' => 'Videos']);
 })->name('videos');
-
-
 
 
 

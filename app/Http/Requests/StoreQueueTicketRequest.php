@@ -14,7 +14,6 @@ class StoreQueueTicketRequest extends FormRequest
             'customer_name' => ['required', 'string', 'max:100'],
             'customer_phone' => ['required', 'string', 'regex:/^\+?[0-9\s\-]{7,15}$/'],
             'barber_id' => ['nullable', 'exists:barbers,id'],
-            'service_id' => ['nullable', 'exists:services,id'],
         ];
     }
 }

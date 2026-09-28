@@ -64,13 +64,13 @@
             'xl:justify-center' :
             'justify-start'">
             <a href="/">
-                <img x-show="$store.sidebar.isExpanded || $store.sidebar.isHovered || $store.sidebar.isMobileOpen"
-                    class="dark:hidden" src="/images/logo/logo.svg" alt="Logo" width="150" height="40" />
-                <img x-show="$store.sidebar.isExpanded || $store.sidebar.isHovered || $store.sidebar.isMobileOpen"
-                    class="hidden dark:block" src="/images/logo/logo-dark.svg" alt="Logo" width="150"
-                    height="40" />
+                <span x-show="$store.sidebar.isExpanded || $store.sidebar.isHovered || $store.sidebar.isMobileOpen"
+                    class="inline-flex items-center gap-3">
+                    <img src="/images/logo/logo-icon.svg" alt="SidecutVQS" width="32" height="32" />
+                    <span class="text-lg font-semibold tracking-tight text-gray-900 dark:text-white">SideCut VQS</span>
+                </span>
                 <img x-show="!$store.sidebar.isExpanded && !$store.sidebar.isHovered && !$store.sidebar.isMobileOpen"
-                    src="/images/logo/logo-icon.svg" alt="Logo" width="32" height="32" />
+                    src="/images/logo/logo-icon.svg" alt="SidecutVQS" width="32" height="32" />
 
             </a>
         </div>

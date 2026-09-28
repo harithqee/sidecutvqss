@@ -6,22 +6,24 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo; 
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class QueueTicket extends Model
 {
     use HasFactory;
 
     protected $fillable = [
-        'queue_session_id', 'barber_id', 'service_id',
+        'queue_session_id', 'barber_id',
         'customer_name', 'customer_phone', 'queue_number',
-        'status', 'joined_at', 'served_at', 'finished_at',
+        'status', 'is_calling', 'joined_at', 'called_at', 'call_version', 'served_at', 'finished_at',
     ];
 
     protected $casts = [
         'joined_at' => 'datetime',
+        'called_at' => 'datetime',
         'served_at' => 'datetime',
         'finished_at' => 'datetime',
+        'is_calling' => 'boolean',
+        'call_version' => 'integer',
     ];
 
     public function session(): BelongsTo
@@ -34,19 +36,9 @@ class QueueTicket extends Model
         return $this->belongsTo(Barber::class);
     }
 
-    public function service(): BelongsTo
-    {
-        return $this->belongsTo(Service::class);
-    }
-
     public function smsLogs(): HasMany
     {
         return $this->hasMany(SmsLog::class);
-    }
-
-    public function feedback(): HasOne
-    {
-        return $this->hasOne(CustomerFeedback::class);
     }
 
     // Matches the frontend's "30 min" waiting time display

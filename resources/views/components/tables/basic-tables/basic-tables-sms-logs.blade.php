@@ -71,18 +71,19 @@
     },
 
     getStatusClass(status) {
-        const classes = {
-            sent: 'bg-green-50 text-green-700 dark:bg-green-500/15 dark:text-green-500',
-            failed: 'bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-500',
-            pending: 'bg-yellow-50 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-400',
-        };
-        return classes[status] || '';
-    },
+    const classes = {
+        sent: 'bg-green-50 text-green-700 dark:bg-green-500/15 dark:text-green-500',
+        failed: 'bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-500',
+        pending: 'bg-yellow-50 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-400',
+        skipped: 'bg-gray-100 text-gray-500 dark:bg-gray-500/15 dark:text-gray-400',
+    };
+    return classes[status] || '';
+},
 
-    statusLabel(status) {
-        const labels = { sent: 'Sent', failed: 'Failed', pending: 'Pending' };
-        return labels[status] || status;
-    }
+statusLabel(status) {
+    const labels = { sent: 'Sent', failed: 'Failed', pending: 'Pending', skipped: 'Skipped (Inactive)' };
+    return labels[status] || status;
+}
 }"
 @date-range-changed.window="onDateRangeChange($event.detail.from, $event.detail.to)">
 

@@ -4,7 +4,6 @@ namespace Database\Seeders;
 
 use App\Models\User;
 use App\Models\Barber;
-use App\Models\Service;
 use App\Models\MessageTemplate;
 use App\Models\QueueSession;
 use App\Models\QueueTicket;
@@ -23,21 +22,6 @@ class DatabaseSeeder extends Seeder
         $danial = Barber::firstOrCreate(
             ['name' => 'Danial'],
             ['role' => 'Junior Barber', 'is_active' => false]
-        );
-
-        $haircut = Service::firstOrCreate(
-            ['name' => 'Haircut'],
-            ['duration_minutes' => 20, 'price' => 15]
-        );
-
-        $shave = Service::firstOrCreate(
-            ['name' => 'Shave'],
-            ['duration_minutes' => 15, 'price' => 10]
-        );
-
-        $beardTrim = Service::firstOrCreate(
-            ['name' => 'Haircut & Beard Trim'],
-            ['duration_minutes' => 35, 'price' => 22]
         );
 
         MessageTemplate::firstOrCreate(
@@ -60,7 +44,6 @@ class DatabaseSeeder extends Seeder
             ['queue_session_id' => $session->id, 'queue_number' => 1],
             [
                 'barber_id' => $lindsey->id,
-                'service_id' => $beardTrim->id,
                 'customer_name' => 'Kaiya George',
                 'customer_phone' => '012-3456789',
                 'status' => 'serving',
@@ -73,7 +56,6 @@ class DatabaseSeeder extends Seeder
             ['queue_session_id' => $session->id, 'queue_number' => 2],
             [
                 'barber_id' => $danial->id,
-                'service_id' => $haircut->id,
                 'customer_name' => 'Zain Geidt',
                 'customer_phone' => '019-8887766',
                 'status' => 'in_queue',
@@ -85,7 +67,6 @@ class DatabaseSeeder extends Seeder
             ['queue_session_id' => $session->id, 'queue_number' => 3],
             [
                 'barber_id' => null,
-                'service_id' => $shave->id,
                 'customer_name' => 'Abram Schleifer',
                 'customer_phone' => '017-2223344',
                 'status' => 'in_queue',
@@ -98,7 +79,6 @@ class DatabaseSeeder extends Seeder
             ['queue_session_id' => $session->id, 'queue_number' => 4],
             [
                 'barber_id' => $lindsey->id,
-                'service_id' => $haircut->id,
                 'customer_name' => 'Carla George',
                 'customer_phone' => '013-5556677',
                 'status' => 'completed',
@@ -112,7 +92,6 @@ class DatabaseSeeder extends Seeder
             ['queue_session_id' => $session->id, 'queue_number' => 5],
             [
                 'barber_id' => $danial->id,
-                'service_id' => $shave->id,
                 'customer_name' => 'Marcus Tan',
                 'customer_phone' => '011-9998877',
                 'status' => 'canceled',

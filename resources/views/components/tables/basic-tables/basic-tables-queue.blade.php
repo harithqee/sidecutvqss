@@ -1,6 +1,14 @@
 <div x-data="{
     orders: [],
+    barbers: [],
+    selectedBarber: 'all',
     toast: { show: false, message: '', type: 'success' },
+
+    get filteredOrders() {
+        if (this.selectedBarber === 'all') return this.orders;
+        if (this.selectedBarber === 'unassigned') return this.orders.filter(order => !order.barberId);
+        return this.orders.filter(order => String(order.barberId) === String(this.selectedBarber));
+    },
 
     showToast(message, type) {
         this.toast.message = message;
@@ -18,20 +26,28 @@
     },
 
     async loadOrders() {
-        const res = await fetch('/api/queue');
+        const [res, barberRes] = await Promise.all([
+            fetch('/api/queue'),
+            fetch('/api/barbers')
+        ]);
         const tickets = await res.json();
+        this.barbers = await barberRes.json();
         const self = this;
         this.orders = tickets.map(function(t) {
             return {
                 id: t.id,
+                barberId: t.barber_id,
                 user: {
                     image: self.randomUserImage(),
                     name: t.customer_name,
-                    role: (t.service && t.service.name) || ''
+                    role: ''
                 },
                 queueNumber: '#' + t.queue_number,
                 server: (t.barber && t.barber.name) || '—',
-                status: t.status
+                status: t.status,
+                isCalling: !!t.is_calling,
+                calledAt: t.called_at,
+                callVersion: t.call_version || 0
             };
         });
     },
@@ -71,9 +87,33 @@
         if (status === 'completed') {
             this.showToast('Ticket completed and SMS receipt sent.', 'success');
         } else {
-            this.showToast('Ticket canceled.', 'success');
+            this.showToast(order.status === 'serving'
+                ? 'Call canceled. The ticket was removed from the calling board.'
+                : 'Ticket canceled.', 'success');
         }
     }
+    },
+
+    async callCustomer(order) {
+        try {
+            const res = await fetch('/api/queue/' + order.id + '/call', {
+                method: 'POST',
+                headers: { 'Accept': 'application/json' }
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                this.showToast(data.message || 'Could not call this customer.', 'error');
+                return;
+            }
+
+            this.orders.forEach(ticket => { ticket.isCalling = false; });
+            order.isCalling = true;
+            order.calledAt = data.called_at;
+            order.callVersion = data.call_version;
+            this.showToast('Ticket ' + order.queueNumber + ' called to the counter. Status remains In Queue.', 'success');
+        } catch (error) {
+            this.showToast('Could not reach the queue. Please try again.', 'error');
+        }
     },
 
     startServing(order) {
@@ -126,6 +166,36 @@
     </div>
 
     <div class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
+        <div class="flex flex-col gap-4 border-b border-gray-100 bg-gray-50/70 px-5 py-4 dark:border-gray-800 dark:bg-white/[0.02] sm:flex-row sm:items-center sm:justify-between sm:px-6">
+            <div class="flex items-center gap-3">
+                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+                    </svg>
+                </div>
+                <div>
+                    <h3 class="text-sm font-semibold text-gray-800 dark:text-white/90">Live queue</h3>
+                    <p class="mt-0.5 text-theme-xs text-gray-500 dark:text-gray-400">Customers waiting and being served</p>
+                </div>
+                <span class="ml-1 inline-flex min-w-7 items-center justify-center rounded-full bg-white px-2 py-1 text-theme-xs font-semibold text-gray-700 ring-1 ring-inset ring-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-700" x-text="filteredOrders.length"></span>
+            </div>
+            <label class="flex items-center gap-3 sm:ml-auto">
+                <span class="whitespace-nowrap text-theme-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">Filter by barber</span>
+                <span class="relative block w-full sm:w-56">
+                    <svg class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M4 21v-7m0-4V3m8 18v-9m0-4V3m8 18v-5m0-4V3M2 14h4m4-6h4m4 8h4"/>
+                    </svg>
+                    <select x-model="selectedBarber" aria-label="Filter customers by barber" class="w-full appearance-none rounded-lg border border-gray-200 bg-white py-2.5 pl-9 pr-9 text-theme-sm font-medium text-gray-700 shadow-theme-xs outline-none transition focus:border-brand-300 focus:ring-2 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200">
+                    <option value="all">All barbers</option>
+                    <template x-for="barber in barbers" :key="barber.id">
+                        <option :value="String(barber.id)" x-text="barber.name"></option>
+                    </template>
+                    <option value="unassigned">Unassigned</option>
+                    </select>
+                    <svg class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </span>
+            </label>
+        </div>
         <div class="max-w-full overflow-x-auto custom-scrollbar">
             <table class="w-full min-w-[1250px]">
                 <thead>
@@ -139,7 +209,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <template x-for="order in orders" :key="order.id">
+                    <template x-for="order in filteredOrders" :key="order.id">
                         <tr class="border-b border-gray-100 dark:border-gray-800">
                             <td class="px-5 py-4 sm:px-6"><span class="text-gray-500 text-theme-sm dark:text-gray-400" x-text="order.id"></span></td>
                             <td class="px-5 py-4 sm:px-6">
@@ -164,6 +234,14 @@
                                         </svg>
                                         SMS
                                     </button>
+                                    <template x-if="order.status === 'in_queue'">
+                                        <button @click="callCustomer(order)" type="button"
+                                            class="inline-flex items-center gap-1.5 rounded-lg border border-brand-300 bg-brand-50 px-3 py-2 text-theme-xs font-medium text-brand-700 shadow-theme-xs transition hover:bg-brand-100 dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-300 dark:hover:bg-brand-500/20">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7L8 5z" fill="currentColor"/></svg>
+                                            <span x-text="order.isCalling ? 'Call again' : 'Call to counter'">Call to counter</span>
+                                        </button>
+                                    </template>
+
                                     <template x-if="order.status === 'in_queue'">
                                         <button @click="startServing(order)" type="button"
                                             class="inline-flex items-center gap-1.5 rounded-lg bg-yellow-500 px-3 py-2 text-theme-xs font-medium text-white shadow-theme-xs transition hover:bg-yellow-600">
@@ -199,7 +277,7 @@
                     </template>
 
                     <!-- Empty state -->
-                    <tr x-show="orders.length === 0">
+                    <tr x-show="filteredOrders.length === 0">
                         <td colspan="6" class="px-5 py-4">
                             <div class="flex h-[300px] flex-col items-center justify-center gap-2">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" class="text-gray-300 dark:text-gray-600">
