@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Barber;
 use App\Models\QueueSession;
 use App\Models\QueueTicket;
+use App\Models\Service;
 use App\Services\QueueingCalculator;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -19,14 +20,14 @@ class StatisticsController extends Controller
     public function summary(QueueingCalculator $calc): JsonResponse
     {
         $today = $this->calcDayStats(today());
-        $queueing = $this->calcQueueingMetrics($today, $calc);
+        $queueing = $this->calcQueueingMetrics($calc);
 
         return response()->json([
             'customers_today' => $today['total'],
             'avg_wait_minutes' => $today['avg_wait'],
             'avg_service_minutes' => $today['avg_service'],
             'completion_rate' => $today['completion_rate'],
-            // --- Queueing theory (M/M/S) model, computed from today's session ---
+            // --- M/M/S queueing model, using active tickets only ---
             'servers_active' => $queueing['servers'],
             'utilization_pct' => $queueing['rho'] !== null ? round($queueing['rho'] * 100, 1) : null,
             'predicted_wait_minutes' => $queueing['Wq'] !== null ? round($queueing['Wq'] * 60, 1) : null,
@@ -37,37 +38,43 @@ class StatisticsController extends Controller
     }
 
     /**
-     * Derives λ (arrivals/hour), μ (service rate per barber/hour) and S (active
-     * barbers) from today's session, then runs the M/M/S model. This is the
-     * theory-backed replacement for the flat "waiting * 15 minutes" guess used
-     * in QueueTicketController::estimateWait().
+     * Applies the M/M/S formulas. Arrival and service estimates use today's
+     * in_queue/serving tickets only; completed/canceled tickets are excluded.
      */
-    private function calcQueueingMetrics(array $todayStats, QueueingCalculator $calc): array
+    private function calcQueueingMetrics(QueueingCalculator $calc): array
     {
         $session = QueueSession::whereDate('session_date', today())->first();
-        $servers = max(Barber::where('is_active', true)->count(), 1);
-        $activeCustomers = $session
-            ? $session->tickets()->whereIn('status', ['in_queue', 'serving'])->count()
-            : 0;
-
-        if (!$session || $activeCustomers === 0) {
+        $servers = Barber::where('is_active', true)->count();
+        $activeTickets = $session
+            ? $session->tickets()->with('service:id,duration_minutes')->whereIn('status', ['in_queue', 'serving'])->get()
+            : collect();
+        if (!$session || $activeTickets->isEmpty()) {
             return ['rho' => 0.0, 'Lq' => 0.0, 'L' => 0.0, 'Wq' => 0.0, 'stable' => true, 'servers' => $servers];
         }
 
-        // Hours the session has been open (avoid divide-by-zero right at open).
+        if ($servers === 0) {
+            return ['rho' => null, 'Lq' => null, 'L' => null, 'Wq' => null, 'stable' => false, 'servers' => 0];
+        }
+
+        // μ is the inverse of average service duration. Use durations attached
+        // to active tickets, falling back to the active service catalog if needed.
+        $serviceDurations = $activeTickets
+            ->map(fn (QueueTicket $ticket) => (float) ($ticket->service?->duration_minutes ?? 0))
+            ->filter(fn (float $minutes) => $minutes > 0);
+        $avgServiceMinutes = $serviceDurations->isNotEmpty() ? $serviceDurations->avg() : 0.0;
+        if ($avgServiceMinutes <= 0) {
+            $avgServiceMinutes = (float) (Service::where('is_active', true)->avg('duration_minutes') ?? 0);
+        }
+
+        if ($avgServiceMinutes <= 0) {
+            return ['rho' => 0.0, 'Lq' => 0.0, 'L' => 0.0, 'Wq' => 0.0, 'stable' => true, 'servers' => $servers];
+        }
+
         $hoursElapsed = max(($session->opened_at ?? now())->diffInMinutes(now()) / 60, 1 / 60);
-        // Only customers still waiting or being served contribute to utilization.
-        $lambda = $activeCustomers / $hoursElapsed;
-
-        // Completed tickets remain useful for estimating each barber's service rate;
-        // their status does not contribute to the active-customer count above.
-        $avgServiceMinutes = $todayStats['avg_service'];
-
-        $mu = $avgServiceMinutes > 0 ? 60 / $avgServiceMinutes : 0.0;
-
-        $result = ($lambda > 0 && $mu > 0)
-            ? $calc->mms($lambda, $mu, $servers)
-            : ['rho' => 0.0, 'Lq' => 0.0, 'L' => 0.0, 'Wq' => 0.0, 'stable' => true];
+        // λ is estimated from active tickets observed since today's session opened.
+        $lambda = $activeTickets->count() / $hoursElapsed;
+        $mu = 60 / $avgServiceMinutes;
+        $result = $calc->mms($lambda, $mu, $servers);
 
         return $result + ['servers' => $servers];
     }

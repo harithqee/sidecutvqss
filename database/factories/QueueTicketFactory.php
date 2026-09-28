@@ -69,4 +69,30 @@ class QueueTicketFactory extends Factory
             'call_version' => 1,
         ]);
     }
+
+    /**
+     * Completed ticket with today's timestamps, useful for testing daily stats.
+     */
+    public function completedToday(): static
+    {
+        return $this->state(function (): array {
+            $todayStart = Carbon::today();
+            $elapsedMinutes = max(0, (int) $todayStart->diffInMinutes(now()));
+            $serviceMinutes = min(fake()->numberBetween(10, 45), $elapsedMinutes);
+            $waitMinutes = min(fake()->numberBetween(5, 25), max(0, $elapsedMinutes - $serviceMinutes));
+            $availableOffset = max(0, $elapsedMinutes - $serviceMinutes - $waitMinutes);
+            $finishedAt = now()->subMinutes(fake()->numberBetween(0, min(180, $availableOffset)));
+            $servedAt = $finishedAt->copy()->subMinutes($serviceMinutes);
+            $joinedAt = $servedAt->copy()->subMinutes($waitMinutes);
+
+            return [
+                'status' => 'completed',
+                'is_calling' => false,
+                'called_at' => null,
+                'served_at' => $servedAt,
+                'finished_at' => $finishedAt,
+                'joined_at' => $joinedAt,
+            ];
+        });
+    }
 }

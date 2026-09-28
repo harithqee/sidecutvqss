@@ -14,36 +14,36 @@
                 { label: 'Completion Rate', value: d.completion_rate + '%' },
             ];
 
-            // Queueing-theory (M/M/S) cards, derived server-side from today's session.
+            // M/M/S queueing metrics, with λ and μ estimated from active tickets only.
             this.queueStats = [
                 {
                     label: 'System Utilization (ρ)',
                     value: d.utilization_pct !== null ? d.utilization_pct + '%' : '—',
-                    hint: d.servers_active + ' barber(s) active',
+                    hint: d.servers_active + ' active barber(s), active-ticket estimate',
                     trend: (d.utilization_pct !== null && d.utilization_pct >= 85) ? 'down' : 'up',
                 },
                 {
-                    label: 'Predicted Wait (Model)',
+                    label: 'Predicted Wait (M/M/S)',
                     value: d.predicted_wait_minutes !== null ? d.predicted_wait_minutes + ' min' : '—',
-                    hint: 'M/M/S estimate, vs ' + d.avg_wait_minutes + ' min actual',
+                    hint: 'Queueing model estimate, vs ' + d.avg_wait_minutes + ' min actual',
                     trend: (d.predicted_wait_minutes !== null && d.predicted_wait_minutes <= d.avg_wait_minutes) ? 'up' : 'down',
                 },
                 {
                     label: 'Avg in Queue (Lq)',
                     value: d.avg_in_queue !== null ? d.avg_in_queue : '—',
-                    hint: 'Customers waiting, on average',
+                    hint: 'M/M/S model estimate, active tickets only',
                     trend: 'up',
                 },
                 {
                     label: 'Avg in System (L)',
                     value: d.avg_in_system !== null ? d.avg_in_system : '—',
-                    hint: 'Waiting + being served',
+                    hint: 'M/M/S model estimate, waiting + serving',
                     trend: 'up',
                 },
             ];
 
             if (d.queue_model_stable === false) {
-                console.warn('Queueing model unstable: arrivals currently exceed total barber capacity (ρ ≥ 1).');
+                console.warn('M/M/S queue model unstable: the active-ticket arrival-rate estimate exceeds total barber capacity (ρ ≥ 1).');
             }
         }
      }">
@@ -59,7 +59,7 @@
         </template>
     </div>
 
-    <!-- Queueing-theory model cards (M/M/S), derived from today's queue history -->
+    <!-- M/M/S metrics, with rates derived from active tickets -->
     <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-6 xl:grid-cols-4 md:mt-6">
         <template x-for="stat in queueStats" :key="stat.label">
             <div class="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] md:p-6">

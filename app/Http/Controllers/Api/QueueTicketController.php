@@ -163,9 +163,24 @@ class QueueTicketController extends Controller
         }
 
         $session = QueueSession::today();
+        $data = $request->validated();
+
+        if (empty($data['barber_id'])) {
+            $leastBusyBarber = Barber::query()
+                ->where('is_active', true)
+                ->withCount(['queueTickets' => fn ($query) => $query
+                    ->where('queue_session_id', $session->id)
+                    ->whereIn('status', ['in_queue', 'serving'])])
+                ->orderBy('queue_tickets_count')
+                ->orderBy('id')
+                ->first();
+
+            $data['barber_id'] = $leastBusyBarber?->id;
+        }
+
         $nextNumber = $session->tickets()->max('queue_number') + 1;
 
-        $ticket = $session->tickets()->create($request->validated() + [
+        $ticket = $session->tickets()->create($data + [
             'queue_number' => $nextNumber,
             'status' => 'in_queue',
             'joined_at' => now(),
@@ -180,7 +195,7 @@ class QueueTicketController extends Controller
         ]);
 
         return response()->json([
-            'ticket' => $ticket,
+            'ticket' => $ticket->load(['barber', 'service']),
             'estimated_wait_minutes' => $estimatedWait,
         ], 201);
     }

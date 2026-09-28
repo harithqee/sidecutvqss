@@ -27,28 +27,32 @@
             return '#465FFF';
         },
         
-        // ρ = λ / (S·μ) — computed server-side from today's actual arrivals,
-        // service times and active barbers (see StatisticsController::summary()).
-        // No fixed max-capacity involved; this is the real system utilization.
+        // M/M/S utilization estimate using only today's in_queue/serving tickets
+        // and active barbers (see StatisticsController::summary()).
         async fetchQueueData() {
             const barberRes = await fetch('/api/barbers');
             const barbers = await barberRes.json();
             this.queueActive = barbers.some(barber => barber.is_active);
             this.isLive = this.queueActive && !this.userPaused;
 
-            // Keep checking barber availability when paused, but don't refresh
-            // the displayed queue metrics until live updates resume.
-            if (this.userPaused && this.queueActive) return;
-
-            const [queueRes, statsRes] = await Promise.all([
-                fetch('/api/queue'),
-                fetch('/api/stats/summary'),
-            ]);
+            // Always check whether the live queue is empty, even when metric
+            // updates are paused, so the gauge cannot remain stuck on an old value.
+            const queueRes = await fetch('/api/queue', { cache: 'no-store' });
             const tickets = await queueRes.json();
-            const stats = await statsRes.json();
-
             this.currentlyInQueue = tickets.length;
-            this.utilizationPercent = this.queueActive ? (stats.utilization_pct ?? 0) : 0;
+
+            if (!this.queueActive || this.currentlyInQueue === 0) {
+                this.utilizationPercent = 0;
+                this.updateChart();
+                return;
+            }
+
+            // Keep the last non-empty metrics when the user pauses live updates.
+            if (this.userPaused) return;
+
+            const statsRes = await fetch('/api/stats/summary', { cache: 'no-store' });
+            const stats = await statsRes.json();
+            this.utilizationPercent = stats.utilization_pct ?? 0;
             this.updateChart();
         },
 
@@ -140,7 +144,7 @@
         <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
                 <h3 class="text-base font-semibold text-gray-800 dark:text-white/90 sm:text-lg">Queue Usage</h3>
-                <p class="mt-1 text-theme-xs text-gray-500 dark:text-gray-400 sm:text-theme-sm">How much of your queue capacity is currently in use.</p>
+                <p class="mt-1 text-theme-xs text-gray-500 dark:text-gray-400 sm:text-theme-sm">M/M/S utilization estimate from the active queue and barber capacity.</p>
             </div>
 
             <div class="flex items-center gap-3">
