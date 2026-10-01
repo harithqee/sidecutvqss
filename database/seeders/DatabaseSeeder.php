@@ -4,7 +4,6 @@ namespace Database\Seeders;
 
 use App\Models\User;
 use App\Models\Barber;
-use App\Models\MessageTemplate;
 use App\Models\QueueSession;
 use App\Models\QueueTicket;
 use Illuminate\Database\Seeder;
@@ -24,15 +23,7 @@ class DatabaseSeeder extends Seeder
             ['role' => 'Junior Barber', 'is_active' => false]
         );
 
-        MessageTemplate::firstOrCreate(
-            ['name' => 'Almost Ready'],
-            ['trigger_event' => 'queue_almost_ready', 'message_body' => 'You\'re up next, please head to the shop.', 'is_active' => true]
-        );
-
-        MessageTemplate::firstOrCreate(
-            ['name' => 'Service Complete'],
-            ['trigger_event' => 'ticket_completed', 'message_body' => 'Thanks for visiting! See you next time.', 'is_active' => true]
-        );
+        $this->call(MessageTemplateSeeder::class);
 
         $session = QueueSession::firstOrCreate(
             ['session_date' => today()],
