@@ -1,14 +1,15 @@
 @extends('layouts.app')
 
 @section('content')
-    <x-common.page-breadcrumb pageTitle="Messages" />
+    <x-common.page-header title="Messages"
+        description="The texts customers receive from Sidecut, and a log of every send attempt." />
 
-    <div class="space-y-6">
+    <div class="space-y-10">
         <x-tables.basic-tables.basic-tables-message-templates />
 
-        <div>
-            <h2 class="mb-4 text-lg font-semibold text-gray-800 dark:text-white/90">SMS Logs</h2>
+        <section aria-labelledby="sms-log-heading">
+            <h2 id="sms-log-heading" class="mb-4 text-lg font-semibold text-gray-800 dark:text-white/90">Delivery log</h2>
             <x-tables.basic-tables.basic-tables-sms-logs />
-        </div>
+        </section>
     </div>
 @endsection

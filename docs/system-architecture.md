@@ -170,28 +170,31 @@ There is no `CustomerFeedback` or `Service` model in `app/Models/` in this snaps
 | Blade view | Description |
 | --- | --- |
 | `resources/views/layouts/app-header.blade.php` | Shared application header/navigation area. |
-| `resources/views/layouts/app.blade.php` | Main dashboard shell: app header, sidebar, backdrop, content slot, and Vite assets. |
+| `resources/views/layouts/app.blade.php` | Main dashboard shell: app header, sidebar, content slot, Vite assets, shared display helpers (`window.sc`), and the global toast and confirm stores. |
 | `resources/views/layouts/backdrop.blade.php` | Mobile/sidebar backdrop overlay. |
 | `resources/views/layouts/fullscreen-layout.blade.php` | Full-screen shell for pages that do not use the regular dashboard frame. |
 | `resources/views/layouts/guest.blade.php` | Guest/public-facing page shell used outside the staff dashboard. |
 | `resources/views/layouts/queue-board.blade.php` | Minimal full-screen layout for the public calling board. |
-| `resources/views/layouts/sidebar-widget.blade.php` | Wrapper for sidebar-related widget content. |
+| `resources/views/layouts/sidebar-widget.blade.php` | Live shop-status card in the sidebar (open/closed, waiting, in chair, barbers on duty). |
 | `resources/views/layouts/sidebar.blade.php` | Application sidebar/navigation menu. |
 
-### 3.5 Reusable component views — 54 files
+### 3.5 Reusable component views — 58 files
 
-#### Calendar and shared components — 8 files
+#### Calendar and shared components — 11 files
 
 | Blade view | Description |
 | --- | --- |
 | `resources/views/components/calender-area.blade.php` | Calendar display area used by the calendar page. |
 | `resources/views/components/common/common-grid-shape.blade.php` | Decorative grid background/shape. |
+| `resources/views/components/common/confirm-dialog.blade.php` | Global confirmation dialog driven by the `confirm` Alpine store. |
 | `resources/views/components/common/component-card.blade.php` | Reusable card container for component examples/content. |
 | `resources/views/components/common/dropdown-menu.blade.php` | Shared dropdown-menu markup. |
-| `resources/views/components/common/page-breadcrumb.blade.php` | Page breadcrumb/header navigation component. |
+| `resources/views/components/common/page-breadcrumb.blade.php` | Page breadcrumb/header navigation component (template example pages). |
+| `resources/views/components/common/page-header.blade.php` | Page title, description, and actions slot used by the Sidecut pages. |
 | `resources/views/components/common/preloader.blade.php` | Loading/preloader overlay. |
 | `resources/views/components/common/table-dropdown.blade.php` | Dropdown actions menu for table rows. |
 | `resources/views/components/common/theme-toggle.blade.php` | Light/dark theme toggle control. |
+| `resources/views/components/common/toast-stack.blade.php` | Non-blocking toast notifications driven by the `toast` Alpine store. |
 
 #### Dashboard/ecommerce components — 11 files
 
@@ -209,10 +212,11 @@ There is no `CustomerFeedback` or `Service` model in `app/Models/` in this snaps
 | `resources/views/components/ecommerce/recent-orders.blade.php` | Recent-order table example from the upstream dashboard template; not the queue ticket table. |
 | `resources/views/components/ecommerce/statistics-chart.blade.php` | General statistics chart example/widget. |
 
-#### Form components — 13 files
+#### Form components — 14 files
 
 | Blade view | Description |
 | --- | --- |
+| `resources/views/components/form/date-range.blade.php` | Flatpickr range picker that dispatches a named window event with the selected dates. |
 | `resources/views/components/form/date-picker.blade.php` | Date-picker control integrated with the frontend date-picker library. |
 | `resources/views/components/form/form-elements/checkbox-component.blade.php` | Checkbox control examples. |
 | `resources/views/components/form/form-elements/default-inputs.blade.php` | Standard text/input examples. |

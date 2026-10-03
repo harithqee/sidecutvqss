@@ -20,9 +20,8 @@
             Alpine.store('theme', {
                 init() {
                     const savedTheme = localStorage.getItem('theme');
-                    const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' :
-                        'light';
-                    this.theme = savedTheme || systemTheme;
+                    const defaultTheme = 'dark'; // Dark is Sidecut's main theme; the toggle saves a preference.
+                    this.theme = savedTheme || defaultTheme;
                     this.updateTheme();
                 },
                 theme: 'light',
@@ -79,8 +78,8 @@
     <script>
         (function() {
             const savedTheme = localStorage.getItem('theme');
-            const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-            const theme = savedTheme || systemTheme;
+            const defaultTheme = 'dark'; // Dark is Sidecut's main theme; the toggle saves a preference.
+            const theme = savedTheme || defaultTheme;
             if (theme === 'dark') {
                 document.documentElement.classList.add('dark');
                 document.body.classList.add('dark', 'bg-gray-900');

@@ -2,7 +2,8 @@
     orders: [],
     barbers: [],
     selectedBarber: 'all',
-    toast: { show: false, message: '', type: 'success' },
+    loaded: false,
+    now: Date.now(),
 
     get filteredOrders() {
         if (this.selectedBarber === 'all') return this.orders;
@@ -10,88 +11,80 @@
         return this.orders.filter(order => String(order.barberId) === String(this.selectedBarber));
     },
 
-    showToast(message, type) {
-        this.toast.message = message;
-        this.toast.type = type || 'success';
-        this.toast.show = true;
-    },
-
-    randomUserImage() {
-        const num = Math.floor(Math.random() * 30) + 1;
-        return './images/user/user-' + String(num).padStart(2, '0') + '.jpg';
-    },
-
     async init() {
         await this.loadOrders();
+        const timer = setInterval(() => this.loadOrders(), 5000);
+        window.addEventListener('beforeunload', () => clearInterval(timer), { once: true });
     },
 
     async loadOrders() {
-        const [res, barberRes] = await Promise.all([
-            fetch('/api/queue'),
-            fetch('/api/barbers')
-        ]);
-        const tickets = await res.json();
-        this.barbers = await barberRes.json();
-        const self = this;
-        this.orders = tickets.map(function(t) {
-            return {
+        try {
+            const [res, barberRes] = await Promise.all([
+                fetch('/api/queue', { cache: 'no-store', headers: { Accept: 'application/json' } }),
+                fetch('/api/barbers', { cache: 'no-store', headers: { Accept: 'application/json' } })
+            ]);
+            if (!res.ok || !barberRes.ok) return;
+            const tickets = await res.json();
+            this.barbers = await barberRes.json();
+            this.orders = tickets.map(t => ({
                 id: t.id,
                 barberId: t.barber_id,
-                user: {
-                    image: self.randomUserImage(),
-                    name: t.customer_name,
-                    role: ''
-                },
-                queueNumber: '#' + t.queue_number,
-                server: (t.barber && t.barber.name) || '—',
+                name: t.customer_name,
+                phone: t.customer_phone,
+                queueNumber: t.queue_number,
+                server: (t.barber && t.barber.name) || null,
                 status: t.status,
                 isCalling: !!t.is_calling,
-                calledAt: t.called_at,
-                callVersion: t.call_version || 0
-            };
-        });
+                joinedAt: t.joined_at,
+                servedAt: t.served_at,
+            }));
+            this.now = Date.now();
+        } finally {
+            this.loaded = true;
+        }
     },
 
-    statusLabel(status) {
-        const labels = { serving: 'Serving', in_queue: 'In Queue', canceled: 'Canceled', completed: 'Completed' };
-        return labels[status] || status;
+    statusLabel(order) {
+        if (order.status === 'serving') return 'In chair';
+        return order.isCalling ? 'Called' : 'Waiting';
     },
 
-    getStatusClass(status) {
-        const classes = {
-            serving: 'bg-yellow-50 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-400',
-            in_queue: 'bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400',
-            canceled: 'bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-500',
-            completed: 'bg-green-50 text-green-700 dark:bg-green-500/15 dark:text-green-500'
-        };
-        return classes[status] || '';
+    statusClass(order) {
+        return order.status === 'serving' ? 'bg-yellow-50 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-400' : 'bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400';
+    },
+
+    elapsed(order) {
+        return order.status === 'serving'
+            ? sc.minutesSince(order.servedAt, this.now)
+            : sc.minutesSince(order.joinedAt, this.now);
     },
 
     async updateStatus(order, status) {
-    const res = await fetch('/api/queue/' + order.id + '/status', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify({ status: status })
-    });
-    if (!res.ok) {
-        this.showToast('Could not update status.', 'error');
-        return;
-    }
-    if (status === 'serving') {
-        order.status = 'serving';
-        this.showToast('Customer is now being served.', 'success');
-    } else {
-        this.orders = this.orders.filter(function(o) {
-            return o.id !== order.id;
+        const res = await fetch('/api/queue/' + order.id + '/status', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({ status: status })
         });
-        if (status === 'completed') {
-            this.showToast('Ticket completed and SMS receipt sent.', 'success');
-        } else {
-            this.showToast(order.status === 'serving'
-                ? 'Call canceled. The ticket was removed from the calling board.'
-                : 'Ticket canceled.', 'success');
+        const result = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            Alpine.store('toast').push('Could not update status.', 'error');
+            return;
         }
-    }
+        if (status === 'serving') {
+            order.status = 'serving';
+            order.isCalling = false;
+            order.servedAt = new Date().toISOString();
+            Alpine.store('toast').push(order.name + ' is in the chair.');
+        } else {
+            this.orders = this.orders.filter(o => o.id !== order.id);
+            if (status === 'completed') {
+                if (result.sms_status === 'failed') Alpine.store('toast').push('Service finished, but the SMS receipt failed to send.', 'warning');
+                else if (result.sms_status === 'skipped') Alpine.store('toast').push('Service finished. No receipt sent because that SMS template is turned off.', 'warning');
+                else Alpine.store('toast').push('Service finished and receipt sent.');
+            } else {
+                Alpine.store('toast').push(sc.ticket(order.queueNumber) + ' was cancelled.');
+            }
+        }
     },
 
     async callCustomer(order) {
@@ -102,17 +95,14 @@
             });
             const data = await res.json();
             if (!res.ok) {
-                this.showToast(data.message || 'Could not call this customer.', 'error');
+                Alpine.store('toast').push(data.message || 'Could not call this customer.', 'error');
                 return;
             }
-
             this.orders.forEach(ticket => { ticket.isCalling = false; });
             order.isCalling = true;
-            order.calledAt = data.called_at;
-            order.callVersion = data.call_version;
-            this.showToast('Ticket ' + order.queueNumber + ' called to the counter. Status remains In Queue.', 'success');
+            Alpine.store('toast').push(sc.ticket(order.queueNumber) + ' is on the calling board.');
         } catch (error) {
-            this.showToast('Could not reach the queue. Please try again.', 'error');
+            Alpine.store('toast').push('Could not reach the queue. Please try again.', 'error');
         }
     },
 
@@ -124,8 +114,14 @@
         this.updateStatus(order, 'completed');
     },
 
-    cancelOrder(order) {
-        this.updateStatus(order, 'canceled');
+    async cancelOrder(order) {
+        const confirmed = await Alpine.store('confirm').ask({
+            title: 'Cancel ' + sc.ticket(order.queueNumber) + '?',
+            message: order.name + ' will be removed from the queue. This can\'t be undone.',
+            confirmText: 'Cancel ticket',
+            cancelText: 'Keep in queue',
+        });
+        if (confirmed) this.updateStatus(order, 'canceled');
     },
 
     async sendSms(order) {
@@ -135,162 +131,108 @@
             body: JSON.stringify({})
         });
         if (!res.ok) {
-            this.showToast('Could not send SMS.', 'error');
+            Alpine.store('toast').push('Could not send SMS.', 'error');
             return;
         }
-        this.showToast('SMS sent to ' + order.user.name + '.', 'success');
+        Alpine.store('toast').push('SMS sent to ' + order.name + '.');
     }
 }">
-
-    <!-- Popup alert -->
-    <div x-show="toast.show" x-cloak class="fixed inset-0 z-999 flex items-center justify-center bg-black/40 px-4" style="display: none;">
-        <div x-show="toast.show"
-             x-transition:enter="transition ease-out duration-200"
-             x-transition:enter-start="opacity-0 scale-95"
-             x-transition:enter-end="opacity-100 scale-100"
-             @click.away="toast.show = false"
-             class="w-full max-w-sm rounded-xl bg-white p-6 text-center shadow-theme-lg dark:bg-gray-900">
-            <div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full"
-                 :class="toast.type === 'success' ? 'bg-green-50 dark:bg-green-500/15' : 'bg-red-50 dark:bg-red-500/15'">
-                <svg x-show="toast.type === 'success'" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
-                    <path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green-600 dark:text-green-400"/>
-                </svg>
-                <svg x-show="toast.type === 'error'" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
-                    <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-red-600 dark:text-red-400"/>
-                </svg>
-            </div>
-            <h3 class="mb-1 text-base font-semibold text-gray-800 dark:text-white/90" x-text="toast.type === 'success' ? 'Success' : 'Failed'"></h3>
-            <p class="mb-5 text-theme-sm text-gray-500 dark:text-gray-400" x-text="toast.message"></p>
-            <button @click="toast.show = false" type="button" class="w-full rounded-lg bg-brand-500 px-4 py-2.5 text-theme-sm font-medium text-white transition hover:bg-brand-600">OK</button>
-        </div>
-    </div>
-
-    <div class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
-        <div class="flex flex-col gap-4 border-b border-gray-100 bg-gray-50/70 px-5 py-4 dark:border-gray-800 dark:bg-white/[0.02] sm:flex-row sm:items-center sm:justify-between sm:px-6">
-            <div class="flex items-center gap-3">
-                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
-                    </svg>
-                </div>
-                <div>
-                    <h3 class="text-sm font-semibold text-gray-800 dark:text-white/90">Live queue</h3>
-                    <p class="mt-0.5 text-theme-xs text-gray-500 dark:text-gray-400">Customers waiting and being served</p>
-                </div>
-                <span class="ml-1 inline-flex min-w-7 items-center justify-center rounded-full bg-white px-2 py-1 text-theme-xs font-semibold text-gray-700 ring-1 ring-inset ring-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:ring-gray-700" x-text="filteredOrders.length"></span>
-            </div>
-            <label class="flex items-center gap-3 sm:ml-auto">
-                <span class="whitespace-nowrap text-theme-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">Filter by barber</span>
-                <span class="relative block w-full sm:w-56">
-                    <svg class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M4 21v-7m0-4V3m8 18v-9m0-4V3m8 18v-5m0-4V3M2 14h4m4-6h4m4 8h4"/>
-                    </svg>
-                    <select x-model="selectedBarber" aria-label="Filter customers by barber" class="w-full appearance-none rounded-lg border border-gray-200 bg-white py-2.5 pl-9 pr-9 text-theme-sm font-medium text-gray-700 shadow-theme-xs outline-none transition focus:border-brand-300 focus:ring-2 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200">
+    <div class="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
+        <div class="flex flex-col gap-3 border-b border-gray-100 px-5 py-4 dark:border-gray-800 sm:flex-row sm:items-center sm:justify-between">
+            <p class="text-theme-sm text-gray-500 dark:text-gray-400">
+                <span class="font-semibold tabular-nums text-gray-800 dark:text-white/90" x-text="filteredOrders.filter(o => o.status === 'in_queue').length"></span> waiting,
+                <span class="font-semibold tabular-nums text-gray-800 dark:text-white/90" x-text="filteredOrders.filter(o => o.status === 'serving').length"></span> in the chair
+            </p>
+            <label class="relative block sm:w-52">
+                <span class="sr-only">Filter by barber</span>
+                <select x-model="selectedBarber"
+                    class="h-10 w-full appearance-none rounded-lg border border-gray-300 bg-white pl-3 pr-9 text-theme-sm text-gray-700 shadow-theme-xs outline-none focus:border-brand-300 focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200">
                     <option value="all">All barbers</option>
                     <template x-for="barber in barbers" :key="barber.id">
                         <option :value="String(barber.id)" x-text="barber.name"></option>
                     </template>
-                    <option value="unassigned">Unassigned</option>
-                    </select>
-                    <svg class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-                </span>
+                    <option value="unassigned">No preference</option>
+                </select>
+                <svg class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
             </label>
         </div>
+
         <div class="max-w-full overflow-x-auto custom-scrollbar">
-            <table class="w-full min-w-[1250px]">
+            <table class="w-full min-w-[1100px]">
                 <thead>
-                    <tr class="border-b border-gray-100 dark:border-gray-800">
-                        <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">ID</p></th>
-                        <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Customer</p></th>
-                        <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Queue Number</p></th>
-                        <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Server</p></th>
-                        <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Status</p></th>
-                        <th class="px-5 py-3 text-left sm:px-6"><p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Actions</p></th>
+                    <tr class="border-b border-gray-100 text-left text-theme-xs font-medium text-gray-500 dark:border-gray-800 dark:text-gray-400">
+                        <th class="px-5 py-3 font-medium">Ticket</th>
+                        <th class="px-5 py-3 font-medium">Customer</th>
+                        <th class="px-5 py-3 font-medium">Barber</th>
+                        <th class="px-5 py-3 font-medium">Status</th>
+                        <th class="px-5 py-3 font-medium">Time</th>
+                        <th class="px-5 py-3 font-medium">Actions</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
                     <template x-for="order in filteredOrders" :key="order.id">
-                        <tr class="border-b border-gray-100 dark:border-gray-800">
-                            <td class="px-5 py-4 sm:px-6"><span class="text-gray-500 text-theme-sm dark:text-gray-400" x-text="order.id"></span></td>
-                            <td class="px-5 py-4 sm:px-6">
-                                <div class="flex items-center gap-3">
-                                    <div class="w-10 h-10 overflow-hidden rounded-full"><img :src="order.user.image" :alt="order.user.name"></div>
-                                    <div>
-                                        <span class="block font-medium text-gray-800 text-theme-sm dark:text-white/90" x-text="order.user.name"></span>
-                                        <span class="block text-gray-500 text-theme-xs dark:text-gray-400" x-text="order.user.role"></span>
-                                    </div>
-                                </div>
+                        <tr class="text-theme-sm">
+                            <td class="px-5 py-3.5 font-mono font-semibold tabular-nums text-gray-900 dark:text-white">
+                                <span class="text-gray-300 dark:text-gray-600">#</span><span x-text="String(order.queueNumber).padStart(3, '0')"></span>
                             </td>
-                            <td class="px-5 py-4 sm:px-6"><p class="text-gray-500 text-theme-sm dark:text-gray-400" x-text="order.queueNumber"></p></td>
-                            <td class="px-5 py-4 sm:px-6"><p class="text-gray-500 text-theme-sm dark:text-gray-400" x-text="order.server"></p></td>
-                            <td class="px-5 py-4 sm:px-6"><p class="text-theme-xs inline-block rounded-full px-2 py-0.5 font-medium" :class="getStatusClass(order.status)" x-text="statusLabel(order.status)"></p></td>
-                            <td class="px-5 py-4 sm:px-6">
+                            <td class="px-5 py-3.5">
+                                <p class="font-medium text-gray-800 dark:text-white/90" x-text="order.name"></p>
+                                <p class="text-theme-xs tabular-nums text-gray-500 dark:text-gray-400" x-text="order.phone"></p>
+                            </td>
+                            <td class="px-5 py-3.5 text-gray-600 dark:text-gray-300">
+                                <span x-text="order.server || 'Any barber'" :class="order.server ? '' : 'text-gray-400 dark:text-gray-500'"></span>
+                            </td>
+                            <td class="px-5 py-3.5">
+                                <p class="text-theme-xs inline-block whitespace-nowrap rounded-full px-2 py-0.5 font-medium" :class="statusClass(order)" x-text="statusLabel(order)"></p>
+                            </td>
+                            <td class="px-5 py-3.5 tabular-nums text-gray-600 dark:text-gray-300">
+                                <span x-text="sc.duration(elapsed(order))"></span>
+                                <span class="text-theme-xs text-gray-400 dark:text-gray-500" x-text="order.status === 'serving' ? 'in chair' : 'waiting'"></span>
+                            </td>
+                            <td class="px-5 py-3.5">
                                 <div class="flex items-center gap-2">
-                                    <button @click="sendSms(order)" type="button"
-                                        class="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-theme-xs font-medium text-gray-700 shadow-theme-xs transition hover:bg-gray-50 dark:border-gray-700 dark:bg-white/[0.03] dark:text-gray-300 dark:hover:bg-white/[0.05]">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24">
-                                            <path d="M0 0h24v24H0z" fill="none" />
-                                            <path fill="currentColor" fill-rule="evenodd" d="M5.788 14.02a1 1 0 0 0 .132.031a456 456 0 0 1 .844 2.002c.503 1.202 1.01 2.44 1.121 2.796c.139.438.285.736.445.94c.083.104.178.196.29.266a1 1 0 0 0 .186.088c.32.12.612.07.795.009a1.3 1.3 0 0 0 .304-.15L9.91 20l2.826-1.762l3.265 2.502q.072.055.156.093c.392.17.772.23 1.13.182c.356-.05.639-.199.85-.368a2 2 0 0 0 .564-.728l.009-.022l.003-.008l.002-.004v-.002l.001-.001a1 1 0 0 0 .04-.133l2.98-15.025a1 1 0 0 0 .014-.146c0-.44-.166-.859-.555-1.112c-.334-.217-.705-.227-.94-.209c-.252.02-.486.082-.643.132a4 4 0 0 0-.26.094l-.011.005l-16.714 6.556l-.002.001a2 2 0 0 0-.167.069a2.5 2.5 0 0 0-.38.212c-.227.155-.75.581-.661 1.285c.07.56.454.905.689 1.071c.128.091.25.156.34.199c.04.02.126.054.163.07l.01.003zm14.138-9.152h-.002l-.026.011l-16.734 6.565l-.026.01l-.01.003a1 1 0 0 0-.09.04a1 1 0 0 0 .086.043l3.142 1.058a1 1 0 0 1 .16.076l10.377-6.075l.01-.005a2 2 0 0 1 .124-.068c.072-.037.187-.091.317-.131c.09-.028.357-.107.645-.014a.85.85 0 0 1 .588.689a.84.84 0 0 1 .003.424c-.07.275-.262.489-.437.653c-.15.14-2.096 2.016-4.015 3.868l-2.613 2.52l-.465.45l5.872 4.502a.54.54 0 0 0 .251.04a.23.23 0 0 0 .117-.052a.5.5 0 0 0 .103-.12l.002-.001l2.89-14.573a2 2 0 0 0-.267.086zm-8.461 12.394l-1.172-.898l-.284 1.805zm-2.247-2.68l1.165-1.125l2.613-2.522l.973-.938l-6.52 3.817l.035.082a339 339 0 0 1 1.22 2.92l.283-1.8a.75.75 0 0 1 .231-.435" clip-rule="evenodd" />
-                                        </svg>
+                                    <!-- Secondary: talk to the customer -->
+                                    <button @click="sendSms(order)" type="button" class="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-3 text-theme-xs font-semibold text-white shadow-theme-xs transition bg-blue-light-600 hover:bg-blue-light-700" :aria-label="'Send SMS to ' + order.name">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
                                         SMS
                                     </button>
+                                    <button @click="callCustomer(order)" type="button" :disabled="order.status !== 'in_queue'"
+                                        class="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-3 text-theme-xs font-semibold text-white shadow-theme-xs transition w-[132px] bg-brand-500 hover:bg-brand-600 disabled:pointer-events-none disabled:opacity-40">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>
+                                        <span x-text="order.isCalling ? 'Call again' : 'Call to counter'">Call to counter</span>
+                                    </button>
+
+                                    <!-- Primary: move the ticket forward -->
                                     <template x-if="order.status === 'in_queue'">
-                                        <button @click="callCustomer(order)" type="button"
-                                            class="inline-flex items-center gap-1.5 rounded-lg border border-brand-300 bg-brand-50 px-3 py-2 text-theme-xs font-medium text-brand-700 shadow-theme-xs transition hover:bg-brand-100 dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-300 dark:hover:bg-brand-500/20">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7L8 5z" fill="currentColor"/></svg>
-                                            <span x-text="order.isCalling ? 'Call again' : 'Call to counter'">Call to counter</span>
+                                        <button @click="startServing(order)" type="button" class="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-3 text-theme-xs font-semibold text-white shadow-theme-xs transition w-[128px] bg-warning-600 hover:bg-warning-700">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l12-7.5-12-7.5Z"/></svg>
+                                            Start service
                                         </button>
                                     </template>
-
-                                    <template x-if="order.status === 'in_queue'">
-                                        <button @click="startServing(order)" type="button"
-                                            class="inline-flex items-center gap-1.5 rounded-lg bg-yellow-500 px-3 py-2 text-theme-xs font-medium text-white shadow-theme-xs transition hover:bg-yellow-600">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none">
-                                                <path d="M6 4l14 8-14 8V4z" fill="currentColor"/>
-                                            </svg>
-                                            Serving
-                                        </button>
-                                    </template>
-
                                     <template x-if="order.status === 'serving'">
-                                        <button @click="completeOrder(order)" type="button"
-                                            class="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-2 text-theme-xs font-medium text-white shadow-theme-xs transition hover:bg-green-700">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none">
-                                                <path d="M5 13l4 4L19 7"
-                                                      stroke="currentColor"
-                                                      stroke-width="2"
-                                                      stroke-linecap="round"
-                                                      stroke-linejoin="round"/>
-                                            </svg>
+                                        <button @click="completeOrder(order)" type="button" class="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-3 text-theme-xs font-semibold text-white shadow-theme-xs transition w-[128px] bg-success-600 hover:bg-success-700">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 5 5L20 7"/></svg>
                                             Complete
                                         </button>
                                     </template>
 
-                                    <button @click="cancelOrder(order)" type="button" :disabled="order.status === 'completed' || order.status === 'canceled'"
-                                        class="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-2 text-theme-xs font-medium text-white shadow-theme-xs transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400 dark:disabled:bg-gray-700 dark:disabled:text-gray-500">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                    <!-- Destructive, kept quiet until hovered -->
+                                    <button @click="cancelOrder(order)" type="button"
+                                        class="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-3 text-theme-xs font-semibold text-white shadow-theme-xs transition bg-error-600 hover:bg-error-700">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
                                         Cancel
                                     </button>
                                 </div>
                             </td>
                         </tr>
                     </template>
-
-                    <!-- Empty state -->
-                    <tr x-show="filteredOrders.length === 0">
-                        <td colspan="6" class="px-5 py-4">
-                            <div class="flex h-[300px] flex-col items-center justify-center gap-2">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" class="text-gray-300 dark:text-gray-600">
-                                    <path d="M12 8v4M12 16h.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                                    <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.5"/>
-                                </svg>
-                                <p class="text-theme-sm font-medium text-gray-500 dark:text-gray-400">No one in the queue right now</p>
-                                <p class="text-theme-xs text-gray-400 dark:text-gray-500">New customers will appear here as they join.</p>
-                            </div>
-                        </td>
-                    </tr>
                 </tbody>
             </table>
+        </div>
+
+        <div x-show="loaded && filteredOrders.length === 0" class="px-5 py-14 text-center">
+            <p class="text-theme-sm font-medium text-gray-700 dark:text-gray-300" x-text="orders.length ? 'Nobody waiting for this barber' : 'The line is empty'"></p>
+            <p class="mt-1 text-theme-xs text-gray-500 dark:text-gray-400">New customers show up here as soon as they join.</p>
         </div>
     </div>
 </div>

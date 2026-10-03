@@ -4,77 +4,40 @@ namespace App\Helpers;
 
 class MenuHelper
 {
-    public static function getMainNavItems()
-    {
-        return [
-            [
-                'icon' => 'dashboard',
-                'name' => 'Dashboard',
-                'path' => '/',
-                
-            ],
-            [
-                'icon' => 'queue',
-                'name' => 'Manage Queue',
-                'path' => '/queue',
-            ],
-            [
-                'icon' => 'queue-control',
-                'name' => 'Queue Control',
-                'path' => '/queue-control',
-            ],
-            [
-                'icon' => 'messages',
-                'name' => 'Manage Messages',
-                'path' => '/messages',
-            ],
-            [
-                'icon' => 'statistics',
-                'name' => 'Statistics',
-                'path' => '/statistics',
-            ],
-          
-          
-          
-           
-        ];
-    }
-
-    public static function getOthersItems()
-    {
-        return [
-            [
-                'icon' => 'customers',
-                'name' => 'Customers',
-                'path' => '/customers',
-            ],
-            [
-                'icon' => 'announcement',
-                'name' => 'Queue Calling',
-                'path' => '/queue-calling',
-            ],
-        ];
-            
-    
-    }
-
     public static function getMenuGroups()
     {
         return [
             [
-                'title' => 'Menu',
-                'items' => self::getMainNavItems()
+                'title' => 'Overview',
+                'items' => [
+                    ['icon' => 'dashboard', 'name' => 'Dashboard', 'path' => '/'],
+                    ['icon' => 'statistics', 'name' => 'Statistics', 'path' => '/statistics'],
+                ],
             ],
             [
-                'title' => 'Others',
-                'items' => self::getOthersItems()
-            ]
+                'title' => 'Front desk',
+                'items' => [
+                    ['icon' => 'queue-control', 'name' => 'Queue Control', 'path' => '/queue-control'],
+                    ['icon' => 'queue', 'name' => 'Manage Queue', 'path' => '/queue'],
+                    ['icon' => 'messages', 'name' => 'Messages', 'path' => '/messages'],
+                ],
+            ],
+            [
+                // Customer-facing screens open in their own tab so staff keep the dashboard.
+                'title' => 'Public screens',
+                'items' => [
+                    ['icon' => 'announcement', 'name' => 'Calling Board', 'path' => '/queue-calling', 'external' => true],
+                    ['icon' => 'customers', 'name' => 'Join Page', 'path' => '/customers', 'external' => true],
+                ],
+            ],
         ];
     }
 
     public static function isActive($path)
     {
-        return request()->is(ltrim($path, '/'));
+        $path = ltrim($path, '/');
+
+        return $path === '' ? request()->path() === '/' : request()->is($path);
     }
 
     public static function getIconSvg($iconName)
